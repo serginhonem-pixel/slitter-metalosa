@@ -106,26 +106,71 @@ const DEFAULT_CSV_DATA = `
 `.trim();
 
 const parseCSV = (csvText) => {
-  const lines = csvText.split("\n");
+  const lines = csvText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
   const parsed = [];
+
+  const normalizeNumber = (str) =>
+    parseFloat(String(str).replace(/"/g, "").replace(",", "."));
+
+  const clean = (str) => String(str).replace(/"/g, "").trim();
+
+  const isNumericLike = (str) => {
+    const n = normalizeNumber(str);
+    return !Number.isNaN(n) && Number.isFinite(n);
+  };
+
   lines.forEach((line) => {
     const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-    if (matches && matches.length >= 6) {
-      const desc = matches[1].replace(/"/g, "");
-      const thicknessStr = matches[4].replace(/"/g, "").replace(",", ".");
-      const type = matches[5].replace(/"/g, "").trim();
-      parsed.push({
-        code: matches[0],
-        desc,
-        history: parseFloat(matches[2].replace(",", ".")),
-        width: parseFloat(matches[3].replace(",", ".")),
-        thickness: parseFloat(thicknessStr),
-        type,
-      });
+    if (!matches || matches.length < 6) return;
+
+    // tokens crus
+    const [c0, c1, c2, c3, c4, c5] = matches;
+
+    const desc = clean(c1);
+
+    let code, type, thickness, width, history;
+
+    // Detecta formato antigo ou novo pela 3ª coluna
+    // Formato ANTIGO:
+    //   code, desc, history, width, thickness, type
+    //
+    // Formato NOVO:
+    //   code, desc, type, thickness, width, history
+    if (isNumericLike(c2) && isNumericLike(c3)) {
+      // === FORMATO ANTIGO ===
+      code = clean(c0);
+      history = normalizeNumber(c2);
+      width = normalizeNumber(c3);
+      thickness = normalizeNumber(c4);
+      type = clean(c5);
+    } else {
+      // === FORMATO NOVO ===
+      code = clean(c0);
+      type = clean(c2);
+      thickness = normalizeNumber(c3);
+      width = normalizeNumber(c4);
+      history = normalizeNumber(c5);
     }
+
+    if (Number.isNaN(width) || Number.isNaN(thickness)) return;
+
+    parsed.push({
+      code,
+      desc,
+      type,
+      thickness,
+      width,
+      history,
+    });
   });
+
   return parsed;
 };
+
 
 const COLORS = [
   "bg-blue-500",
