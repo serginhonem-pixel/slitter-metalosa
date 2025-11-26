@@ -110,24 +110,33 @@ const parseCSV = (csvText) => {
 
   lines.forEach((line) => {
     const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
-    if (matches && matches.length >= 6) {
-      const desc = matches[1].replace(/"/g, "");
-      const thicknessStr = matches[4].replace(/"/g, "").replace(",", ".");
-      const type = matches[5].replace(/"/g, "").trim();
+    if (!matches || matches.length < 6) return;
 
-      parsed.push({
-        code: matches[0],
-        desc,
-        history: parseFloat(matches[2].replace(",", ".")),
-        width: parseFloat(matches[3].replace(",", ".")),
-        thickness: parseFloat(thicknessStr),
-        type,
-      });
-    }
+    const code = matches[0];
+    const desc = matches[1].replace(/"/g, "");
+
+    // pega sempre a partir do final, pra funcionar com ou sem vírgula no número
+    const last = matches.length - 1;
+    const type = matches[last].replace(/"/g, "").trim();              // ex: BQ / BZ
+    const thicknessStr = matches[last - 1]                             // ex: "1,80"
+      .replace(/"/g, "")
+      .replace(",", ".");
+    const width = parseFloat(matches[last - 2].replace(",", "."));     // largura
+    const history = parseFloat(matches[last - 3].replace(",", "."));   // histórico
+
+    parsed.push({
+      code,
+      desc,
+      history: isNaN(history) ? 0 : history,
+      width: isNaN(width) ? 0 : width,
+      thickness: parseFloat(thicknessStr) || 0,
+      type,
+    });
   });
 
   return parsed;
 };
+
 
 const COLORS = [
   "bg-blue-500",
