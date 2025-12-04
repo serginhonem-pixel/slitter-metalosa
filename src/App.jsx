@@ -227,11 +227,11 @@ export default function SlitterOptimizer() {
     }
   }, [availableProducts, selectedProductCode]);
 
-  const getStripWeight = (width, mWidth, mWeight) => {
-    if (!mWidth || !mWeight) return 0;
-    const safeWidth = Number(mWidth) || 0;
+  const getStripWeight = (width, usableMotherWidth, mWeight) => {
+    if (!usableMotherWidth || !mWeight) return 0;
+    const safeWidth = Number(usableMotherWidth) || 0;
     const safeWeight = Number(mWeight) || 0;
-    if (safeWidth === 0 || safeWeight === 0) return 0;
+    if (safeWidth <= 0 || safeWeight === 0) return 0;
     return (width / safeWidth) * safeWeight;
   };
 
@@ -395,7 +395,7 @@ export default function SlitterOptimizer() {
                 pattern.assignedCoils.reduce((cAcc, coil) => {
                   return (
                     cAcc +
-                    getStripWeight(item.width, motherWidth, coil.weight)
+                    getStripWeight(item.width, usableWidth, coil.weight)
                   );
                 }, 0)
               );
@@ -411,7 +411,7 @@ export default function SlitterOptimizer() {
               weightToAdd: pattern.assignedCoils.reduce((cAcc, coil) => {
                 return (
                   cAcc +
-                  getStripWeight(item.width, motherWidth, coil.weight)
+                  getStripWeight(item.width, usableWidth, coil.weight)
                 );
               }, 0),
             }));
@@ -421,7 +421,6 @@ export default function SlitterOptimizer() {
               totalWidth: combData.totalWidth,
               remainingWaste: waste - combData.totalWidth,
               projectedEfficiency,
-              totalWeightToAdd: comboWeightToAdd,
               totalWeightToAdd: comboWeightToAdd,
             };
           });
@@ -469,7 +468,7 @@ export default function SlitterOptimizer() {
     setTimeout(() => {
       const safeMotherWidth = Number(motherWidth);
       const safeTrim = Number(trim) || 0;
-      const usableWidth = safeMotherWidth - safeTrim;
+      const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
 
       let allItems = [];
       const demandAnalysis = {};
@@ -479,7 +478,7 @@ export default function SlitterOptimizer() {
       demands.forEach((d) => {
         const estimatedStripWeight = getStripWeight(
           d.width,
-          safeMotherWidth,
+          usableWidth,
           avgCoilWeight
         );
         const safeStripWeight =
@@ -567,7 +566,7 @@ export default function SlitterOptimizer() {
         sortedItems.forEach((item) => {
           const realStripWeight = getStripWeight(
             item.width,
-            safeMotherWidth,
+            usableWidth,
             coil.weight
           );
           if (demandAnalysis[item.width]) {
@@ -617,7 +616,7 @@ export default function SlitterOptimizer() {
           0
         );
         const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
-          return acc + getStripWeight(p.usedWidth, safeMotherWidth, c.weight);
+          return acc + getStripWeight(p.usedWidth, usableWidth, c.weight);
         }, 0);
 
         p.scrapWeight = patternInputWeight - patternUsefulWeight;
