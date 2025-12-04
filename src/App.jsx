@@ -142,18 +142,17 @@ const parseCSV = (csvText) => {
     if (isNumericLike(c2) && isNumericLike(c3)) {
       // === FORMATO ANTIGO ===
       code = clean(c0);
-      history = normalizeNumber(c2);
+      const legacyTail = matches.slice(-3);
+      const legacyWidth = legacyTail[0];
+      const legacyThickness = legacyTail[1];
+      const legacyType = legacyTail[2];
 
-      if (matches.length >= 7) {
-        const last = matches.length - 1;
-        width = normalizeNumber(matches[last - 2]);
-        thickness = normalizeNumber(matches[last - 1]);
-        type = clean(matches[last]);
-      } else {
-        width = normalizeNumber(c3);
-        thickness = normalizeNumber(c4);
-        type = clean(c5);
-      }
+      const legacyHistoryCandidate = matches[matches.length - 4] ?? c2;
+
+      history = normalizeNumber(legacyHistoryCandidate);
+      width = normalizeNumber(legacyWidth);
+      thickness = normalizeNumber(legacyThickness);
+      type = clean(legacyType);
     } else {
       // === FORMATO NOVO ===
       code = clean(c0);
@@ -222,7 +221,15 @@ export default function SlitterOptimizer() {
   }, [coilThickness, coilType, activeDb]);
 
   const availableTypes = useMemo(() => {
-    const types = new Set(activeDb.map((i) => i.type));
+    const normalizeType = (raw) => String(raw ?? "").replace(/"/g, "").trim().toUpperCase();
+    const isNumericType = (t) => !Number.isNaN(Number(t));
+
+    const types = new Set(
+      activeDb
+        .map((i) => normalizeType(i.type))
+        .filter((t) => t && !isNumericType(t))
+    );
+
     return Array.from(types).sort();
   }, [activeDb]);
 

@@ -223,7 +223,15 @@ export default function SlitterOptimizer() {
   }, [coilThickness, coilType, activeDb]);
 
   const availableTypes = useMemo(() => {
-    const types = new Set(activeDb.map((i) => i.type));
+    const normalizeType = (raw) => String(raw ?? "").replace(/"/g, "").trim().toUpperCase();
+    const isNumericType = (t) => !Number.isNaN(Number(t));
+
+    const types = new Set(
+      activeDb
+        .map((i) => normalizeType(i.type))
+        .filter((t) => t && !isNumericType(t))
+    );
+
     return Array.from(types).sort();
   }, [activeDb]);
 
