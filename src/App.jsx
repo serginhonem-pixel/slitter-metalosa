@@ -143,9 +143,16 @@ const parseCSV = (csvText) => {
       // === FORMATO ANTIGO ===
       code = clean(c0);
       history = normalizeNumber(c2);
-      width = normalizeNumber(c3);
-      thickness = normalizeNumber(c4);
-      type = clean(c5);
+
+      if (matches.length >= 7) {
+        width = normalizeNumber(matches[4]);
+        thickness = normalizeNumber(matches[5]);
+        type = clean(matches[6]);
+      } else {
+        width = normalizeNumber(c3);
+        thickness = normalizeNumber(c4);
+        type = clean(c5);
+      }
     } else {
       // === FORMATO NOVO ===
       code = clean(c0);
