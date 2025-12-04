@@ -145,9 +145,10 @@ const parseCSV = (csvText) => {
       history = normalizeNumber(c2);
 
       if (matches.length >= 7) {
-        width = normalizeNumber(matches[4]);
-        thickness = normalizeNumber(matches[5]);
-        type = clean(matches[6]);
+        const last = matches.length - 1;
+        width = normalizeNumber(matches[last - 2]);
+        thickness = normalizeNumber(matches[last - 1]);
+        type = clean(matches[last]);
       } else {
         width = normalizeNumber(c3);
         thickness = normalizeNumber(c4);
