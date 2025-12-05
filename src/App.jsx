@@ -191,8 +191,6 @@ const COLORS = [
   "bg-orange-500",
 ];
 
-const PRESET_STORAGE_KEY = "slitter-preset-v1";
-
 export default function SlitterOptimizer() {
   const [motherWidth, setMotherWidth] = useState(1200);
   const [stockCoils, setStockCoils] = useState([{ id: 1, weight: 10000 }]);
@@ -246,14 +244,9 @@ export default function SlitterOptimizer() {
     }
   }, [availableProducts, selectedProductCode]);
 
-  useEffect(() => {
-    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
-    setHasSavedPreset(Boolean(raw));
-  }, []);
-
-  const getStripWeight = (width, usableMotherWidth, mWeight) => {
-    if (!usableMotherWidth || !mWeight) return 0;
-    const safeWidth = Number(usableMotherWidth) || 0;
+  const getStripWeight = (width, mWidth, mWeight) => {
+    if (!mWidth || !mWeight) return 0;
+    const safeWidth = Number(mWidth) || 0;
     const safeWeight = Number(mWeight) || 0;
     if (safeWidth <= 0 || safeWeight === 0) return 0;
     return (width / safeWidth) * safeWeight;
@@ -1628,81 +1621,6 @@ export default function SlitterOptimizer() {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="mt-8 space-y-3">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Database className="w-5 h-5 text-blue-300" />
-                <h4 className="text-sm font-bold text-zinc-100">Salvar preset</h4>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
-                Guarda largura, refilo, bobinas e pedidos para reutilizar em outra sessão.
-              </p>
-              <button
-                onClick={savePreset}
-                className="px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white border border-blue-500/50 transition"
-              >
-                Salvar no navegador
-              </button>
-            </div>
-
-            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-emerald-300" />
-                <h4 className="text-sm font-bold text-zinc-100">Recuperar preset</h4>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
-                Restaura a última configuração salva para continuar de onde parou.
-              </p>
-              <button
-                onClick={loadPreset}
-                disabled={!hasSavedPreset}
-                className="px-3 py-2 text-xs font-semibold rounded-lg border transition disabled:bg-zinc-800 disabled:text-zinc-500 disabled:border-zinc-800 bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500/50"
-              >
-                {hasSavedPreset ? "Carregar preset salvo" : "Nenhum preset salvo"}
-              </button>
-            </div>
-
-            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-orange-300" />
-                <h4 className="text-sm font-bold text-zinc-100">Plano demo</h4>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
-                Carrega um exemplo pronto de BQ 2,00mm com pedidos e bobinas para testar o cálculo na hora.
-              </p>
-              <button
-                onClick={loadDemoPlan}
-                className="px-3 py-2 text-xs font-semibold rounded-lg bg-orange-600 hover:bg-orange-500 text-white border border-orange-500/50 transition"
-              >
-                Preencher com exemplo
-              </button>
-            </div>
-
-            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-zinc-200" />
-                <h4 className="text-sm font-bold text-zinc-100">Limpar tudo</h4>
-              </div>
-              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
-                Restaura os valores padrão e limpa demandas/resultados para começar um novo corte.
-              </p>
-              <button
-                onClick={clearAll}
-                className="px-3 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 transition"
-              >
-                Resetar configurações
-              </button>
-            </div>
-          </div>
-
-          {presetStatus && (
-            <div className="text-xs text-zinc-300 bg-zinc-900/70 border border-zinc-800 rounded-xl p-3">
-              {presetStatus}
-            </div>
-          )}
         </div>
 
         <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
