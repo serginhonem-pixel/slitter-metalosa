@@ -142,10 +142,17 @@ const parseCSV = (csvText) => {
     if (isNumericLike(c2) && isNumericLike(c3)) {
       // === FORMATO ANTIGO ===
       code = clean(c0);
-      history = normalizeNumber(c2);
-      width = normalizeNumber(c3);
-      thickness = normalizeNumber(c4);
-      type = clean(c5);
+      const legacyTail = matches.slice(-3);
+      const legacyWidth = legacyTail[0];
+      const legacyThickness = legacyTail[1];
+      const legacyType = legacyTail[2];
+
+      const legacyHistoryCandidate = matches[matches.length - 4] ?? c2;
+
+      history = normalizeNumber(legacyHistoryCandidate);
+      width = normalizeNumber(legacyWidth);
+      thickness = normalizeNumber(legacyThickness);
+      type = clean(legacyType);
     } else {
       // === FORMATO NOVO ===
       code = clean(c0);
@@ -184,6 +191,8 @@ const COLORS = [
   "bg-orange-500",
 ];
 
+const PRESET_STORAGE_KEY = "slitter-preset-v1";
+
 export default function SlitterOptimizer() {
   const [motherWidth, setMotherWidth] = useState(1200);
   const [stockCoils, setStockCoils] = useState([{ id: 1, weight: 10000 }]);
@@ -200,6 +209,8 @@ export default function SlitterOptimizer() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [showDb, setShowDb] = useState(false);
   const [weightAlert, setWeightAlert] = useState(null);
+  const [presetStatus, setPresetStatus] = useState("");
+  const [hasSavedPreset, setHasSavedPreset] = useState(false);
 
   const activeDb = useMemo(() => parseCSV(DEFAULT_CSV_DATA), []);
 
@@ -214,7 +225,15 @@ export default function SlitterOptimizer() {
   }, [coilThickness, coilType, activeDb]);
 
   const availableTypes = useMemo(() => {
-    const types = new Set(activeDb.map((i) => i.type));
+    const normalizeType = (raw) => String(raw ?? "").replace(/"/g, "").trim().toUpperCase();
+    const isNumericType = (t) => !Number.isNaN(Number(t));
+
+    const types = new Set(
+      activeDb
+        .map((i) => normalizeType(i.type))
+        .filter((t) => t && !isNumericType(t))
+    );
+
     return Array.from(types).sort();
   }, [activeDb]);
 
@@ -227,11 +246,16 @@ export default function SlitterOptimizer() {
     }
   }, [availableProducts, selectedProductCode]);
 
-  const getStripWeight = (width, mWidth, mWeight) => {
-    if (!mWidth || !mWeight) return 0;
-    const safeWidth = Number(mWidth) || 0;
+  useEffect(() => {
+    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+    setHasSavedPreset(Boolean(raw));
+  }, []);
+
+  const getStripWeight = (width, usableMotherWidth, mWeight) => {
+    if (!usableMotherWidth || !mWeight) return 0;
+    const safeWidth = Number(usableMotherWidth) || 0;
     const safeWeight = Number(mWeight) || 0;
-    if (safeWidth === 0 || safeWeight === 0) return 0;
+    if (safeWidth <= 0 || safeWeight === 0) return 0;
     return (width / safeWidth) * safeWeight;
   };
 
@@ -289,6 +313,13 @@ export default function SlitterOptimizer() {
     setWeightAlert(null);
   };
 
+  const resetOutputs = () => {
+    setResults(null);
+    setSuggestions([]);
+    setWeightAlert(null);
+    setIsCalculating(false);
+  };
+
   const addComboDemand = (items) => {
     const newItems = items.map((item, idx) => ({
       id: Date.now() + idx,
@@ -311,9 +342,97 @@ export default function SlitterOptimizer() {
     setWeightAlert(null);
   };
 
+  const savePreset = () => {
+    const payload = {
+      motherWidth,
+      stockCoils,
+      trim,
+      coilThickness,
+      coilType,
+      demands,
+    };
+
+    try {
+      localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(payload));
+      setPresetStatus("Preset salvo localmente.");
+      setHasSavedPreset(true);
+    } catch (err) {
+      console.error(err);
+      setPresetStatus("Não foi possível salvar o preset.");
+    }
+  };
+
+  const loadPreset = () => {
+    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (!raw) {
+      setPresetStatus("Nenhum preset salvo ainda.");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      setMotherWidth(parsed.motherWidth ?? 1200);
+      setStockCoils(parsed.stockCoils ?? [{ id: 1, weight: 10000 }]);
+      setTrim(parsed.trim ?? 20);
+      setCoilThickness(parsed.coilThickness ?? 2.0);
+      setCoilType(parsed.coilType ?? "BQ");
+      setDemands(parsed.demands ?? []);
+      resetOutputs();
+      setPresetStatus("Preset recuperado com sucesso.");
+    } catch (err) {
+      console.error(err);
+      setPresetStatus("Erro ao carregar preset salvo.");
+    }
+  };
+
+  const loadDemoPlan = () => {
+    const demoType = "BQ";
+    const demoThickness = 2.0;
+    const demoProducts = activeDb
+      .filter(
+        (p) =>
+          p.type.toUpperCase() === demoType &&
+          Math.abs(p.thickness - demoThickness) < 0.05
+      )
+      .slice(0, 3);
+
+    const demoDemands = demoProducts.map((p, idx) => ({
+      id: Date.now() + idx,
+      code: p.code,
+      desc: p.desc,
+      width: p.width,
+      targetWeight: 3500 + idx * 500,
+    }));
+
+    setMotherWidth(1200);
+    setTrim(20);
+    setCoilThickness(demoThickness);
+    setCoilType(demoType);
+    setStockCoils([
+      { id: 1, weight: 9000 },
+      { id: 2, weight: 7200 },
+    ]);
+    setDemands(demoDemands);
+    resetOutputs();
+    setPresetStatus("Plano demo carregado. Ajuste e clique em Gerar Plano.");
+  };
+
+  const clearAll = () => {
+    setMotherWidth(1200);
+    setStockCoils([{ id: 1, weight: 10000 }]);
+    setTrim(20);
+    setCoilThickness(2.0);
+    setCoilType("BQ");
+    setDemands([]);
+    resetOutputs();
+    setPresetStatus("Configurações resetadas.");
+  };
+
   const findBestCombinations = (targetWidth, products) => {
     let candidates = [];
     const sortedProducts = [...products].sort((a, b) => b.width - a.width);
+    const maxComboSize = 4; // permitir combos menores e maiores para preencher melhor o espaço
+    const maxCandidates = 1500;
 
     const search = (currentCombo, currentWidth, startIndex) => {
       if (currentCombo.length > 0) {
@@ -323,7 +442,7 @@ export default function SlitterOptimizer() {
           waste: targetWidth - currentWidth,
         });
       }
-      if (currentCombo.length >= 3) return;
+      if (currentCombo.length >= maxComboSize) return;
 
       for (let i = startIndex; i < sortedProducts.length; i++) {
         const p = sortedProducts[i];
@@ -331,7 +450,7 @@ export default function SlitterOptimizer() {
           currentCombo.push(p);
           search(currentCombo, currentWidth + p.width, i);
           currentCombo.pop();
-          if (candidates.length > 500) return;
+          if (candidates.length > maxCandidates) return;
         }
       }
     };
@@ -395,7 +514,7 @@ export default function SlitterOptimizer() {
                 pattern.assignedCoils.reduce((cAcc, coil) => {
                   return (
                     cAcc +
-                    getStripWeight(item.width, motherWidth, coil.weight)
+                    getStripWeight(item.width, usableWidth, coil.weight)
                   );
                 }, 0)
               );
@@ -411,7 +530,7 @@ export default function SlitterOptimizer() {
               weightToAdd: pattern.assignedCoils.reduce((cAcc, coil) => {
                 return (
                   cAcc +
-                  getStripWeight(item.width, motherWidth, coil.weight)
+                  getStripWeight(item.width, usableWidth, coil.weight)
                 );
               }, 0),
             }));
@@ -421,7 +540,6 @@ export default function SlitterOptimizer() {
               totalWidth: combData.totalWidth,
               remainingWaste: waste - combData.totalWidth,
               projectedEfficiency,
-              totalWeightToAdd: comboWeightToAdd,
               totalWeightToAdd: comboWeightToAdd,
             };
           });
@@ -467,196 +585,212 @@ export default function SlitterOptimizer() {
     }
 
     setTimeout(() => {
-      const safeMotherWidth = Number(motherWidth);
-      const safeTrim = Number(trim) || 0;
-      const usableWidth = safeMotherWidth - safeTrim;
+      try {
+        const safeMotherWidth = Number(motherWidth);
+        const safeTrim = Number(trim) || 0;
+        const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
 
-      let allItems = [];
-      const demandAnalysis = {};
+        let allItems = [];
+        const demandAnalysis = {};
 
-      const avgCoilWeight = totalAvailableWeight / stockCoils.length;
+        const avgCoilWeight = totalAvailableWeight / stockCoils.length;
 
-      demands.forEach((d) => {
-        const estimatedStripWeight = getStripWeight(
-          d.width,
-          safeMotherWidth,
-          avgCoilWeight
-        );
-        const safeStripWeight =
-          estimatedStripWeight > 0 ? estimatedStripWeight : 1;
-        const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
+        demands.forEach((d) => {
+          const estimatedStripWeight = getStripWeight(
+            d.width,
+            usableWidth,
+            avgCoilWeight
+          );
+          const safeStripWeight =
+            estimatedStripWeight > 0 ? estimatedStripWeight : 1;
+          const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
 
-        demandAnalysis[d.width] = {
-          reqWeight: d.targetWeight,
-          producedQty: 0,
-          producedWeight: 0,
-          desc: d.desc,
-        };
+          demandAnalysis[d.width] = {
+            reqWeight: d.targetWeight,
+            producedQty: 0,
+            producedWeight: 0,
+            desc: d.desc,
+          };
 
-        for (let i = 0; i < qtyNeeded; i++) {
-          allItems.push({ width: d.width, desc: d.desc, code: d.code });
-        }
-      });
-
-      allItems.sort((a, b) => b.width - a.width);
-
-      let availableCoils = [...stockCoils].map((c) => ({
-        ...c,
-        items: [],
-        currentWidth: 0,
-      }));
-      let virtualCoils = [];
-
-      allItems.forEach((item) => {
-        let bestCoilIndex = -1;
-        let minSpaceLeft = usableWidth + 1;
-
-        for (let i = 0; i < availableCoils.length; i++) {
-          const spaceLeft = usableWidth - availableCoils[i].currentWidth;
-          if (spaceLeft >= item.width) {
-            const potentialSpaceLeft = spaceLeft - item.width;
-            if (potentialSpaceLeft < minSpaceLeft) {
-              minSpaceLeft = potentialSpaceLeft;
-              bestCoilIndex = i;
-            }
+          for (let i = 0; i < qtyNeeded; i++) {
+            allItems.push({ width: d.width, desc: d.desc, code: d.code });
           }
-        }
+        });
 
-        if (bestCoilIndex !== -1) {
-          availableCoils[bestCoilIndex].items.push(item);
-          availableCoils[bestCoilIndex].currentWidth += item.width;
-        } else {
-          let bestVirtualIndex = -1;
-          let minVirtualSpace = usableWidth + 1;
+        allItems.sort((a, b) => b.width - a.width);
 
-          for (let j = 0; j < virtualCoils.length; j++) {
-            const vSpaceLeft = usableWidth - virtualCoils[j].currentWidth;
-            if (vSpaceLeft >= item.width) {
-              if (vSpaceLeft - item.width < minVirtualSpace) {
-                minVirtualSpace = vSpaceLeft - item.width;
-                bestVirtualIndex = j;
+        let availableCoils = [...stockCoils].map((c) => ({
+          ...c,
+          items: [],
+          currentWidth: 0,
+        }));
+        let virtualCoils = [];
+
+        allItems.forEach((item) => {
+          let bestCoilIndex = -1;
+          let minSpaceLeft = usableWidth + 1;
+
+          for (let i = 0; i < availableCoils.length; i++) {
+            const spaceLeft = usableWidth - availableCoils[i].currentWidth;
+            if (spaceLeft >= item.width) {
+              const potentialSpaceLeft = spaceLeft - item.width;
+              if (potentialSpaceLeft < minSpaceLeft) {
+                minSpaceLeft = potentialSpaceLeft;
+                bestCoilIndex = i;
               }
             }
           }
 
-          if (bestVirtualIndex !== -1) {
-            virtualCoils[bestVirtualIndex].items.push(item);
-            virtualCoils[bestVirtualIndex].currentWidth += item.width;
+          if (bestCoilIndex !== -1) {
+            availableCoils[bestCoilIndex].items.push(item);
+            availableCoils[bestCoilIndex].currentWidth += item.width;
           } else {
-            virtualCoils.push({
-              id: `v-${Date.now()}-${Math.random()}`,
-              weight: 10000,
-              items: [item],
-              currentWidth: item.width,
-              isVirtual: true,
-            });
-          }
-        }
-      });
+            let bestVirtualIndex = -1;
+            let minVirtualSpace = usableWidth + 1;
 
-      const allUsedCoils = [
-        ...availableCoils.filter((c) => c.items.length > 0),
-        ...virtualCoils,
-      ];
+            for (let j = 0; j < virtualCoils.length; j++) {
+              const vSpaceLeft = usableWidth - virtualCoils[j].currentWidth;
+              if (vSpaceLeft >= item.width) {
+                if (vSpaceLeft - item.width < minVirtualSpace) {
+                  minVirtualSpace = vSpaceLeft - item.width;
+                  bestVirtualIndex = j;
+                }
+              }
+            }
 
-      const patternsMap = {};
-      allUsedCoils.forEach((coil, index) => {
-        const sortedItems = [...coil.items].sort((a, b) => b.width - a.width);
-        const key = JSON.stringify(sortedItems.map((i) => i.width));
-
-        sortedItems.forEach((item) => {
-          const realStripWeight = getStripWeight(
-            item.width,
-            safeMotherWidth,
-            coil.weight
-          );
-          if (demandAnalysis[item.width]) {
-            demandAnalysis[item.width].producedQty++;
-            demandAnalysis[item.width].producedWeight += realStripWeight;
+            if (bestVirtualIndex !== -1) {
+              virtualCoils[bestVirtualIndex].items.push(item);
+              virtualCoils[bestVirtualIndex].currentWidth += item.width;
+            } else {
+              virtualCoils.push({
+                id: `v-${Date.now()}-${Math.random()}`,
+                weight: 10000,
+                items: [item],
+                currentWidth: item.width,
+                isVirtual: true,
+              });
+            }
           }
         });
 
-        if (patternsMap[key]) {
-          patternsMap[key].count++;
-          patternsMap[key].assignedCoils.push(coil);
-        } else {
-          const usedWidth = sortedItems.reduce((a, b) => a + b.width, 0);
-          let currentPos = 0;
-          const setupCoordinates = sortedItems.map((item) => {
-            const start = currentPos;
-            currentPos += item.width;
-            return {
-              start,
-              end: currentPos,
-              width: item.width,
-              desc: item.desc,
-            };
+        const allUsedCoils = [
+          ...availableCoils.filter((c) => c.items.length > 0),
+          ...virtualCoils,
+        ];
+
+        const patternsMap = {};
+        allUsedCoils.forEach((coil, index) => {
+          const sortedItems = [...coil.items].sort((a, b) => b.width - a.width);
+          const key = JSON.stringify(sortedItems.map((i) => i.width));
+
+          sortedItems.forEach((item) => {
+            const realStripWeight = getStripWeight(
+              item.width,
+              usableWidth,
+              coil.weight
+            );
+            if (demandAnalysis[item.width]) {
+              demandAnalysis[item.width].producedQty++;
+              demandAnalysis[item.width].producedWeight += realStripWeight;
+            }
           });
 
-          patternsMap[key] = {
-            cuts: sortedItems,
-            setupCoordinates,
-            count: 1,
-            assignedCoils: [coil],
-            usedWidth,
-            index,
-          };
+          if (patternsMap[key]) {
+            patternsMap[key].count++;
+            patternsMap[key].assignedCoils.push(coil);
+          } else {
+            const usedWidth = sortedItems.reduce((a, b) => a + b.width, 0);
+            let currentPos = 0;
+            const setupCoordinates = sortedItems.map((item) => {
+              const start = currentPos;
+              currentPos += item.width;
+              return {
+                start,
+                end: currentPos,
+                width: item.width,
+                desc: item.desc,
+              };
+            });
+
+            patternsMap[key] = {
+              cuts: sortedItems,
+              setupCoordinates,
+              count: 1,
+              assignedCoils: [coil],
+              usedWidth,
+              index,
+            };
+          }
+        });
+
+        const patternsArray = Object.values(patternsMap).sort(
+          (a, b) => b.count - a.count
+        );
+
+        let totalInputWeight = 0;
+        let totalScrapWeight = 0;
+
+        patternsArray.forEach((p) => {
+          const patternInputWeight = p.assignedCoils.reduce(
+            (acc, c) => acc + c.weight,
+            0
+          );
+          const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
+            return acc + getStripWeight(p.usedWidth, usableWidth, c.weight);
+          }, 0);
+
+          p.scrapWeight = patternInputWeight - patternUsefulWeight;
+          totalInputWeight += patternInputWeight;
+          totalScrapWeight += p.scrapWeight;
+        });
+
+        const efficiency =
+          totalInputWeight > 0
+            ? ((totalInputWeight - totalScrapWeight) / totalInputWeight) * 100
+            : 0;
+
+        const scrapPercent =
+          totalInputWeight > 0
+            ? (totalScrapWeight / totalInputWeight) * 100
+            : 0;
+
+        let foundSuggestions = [];
+        if (
+          efficiency < 97 ||
+          patternsArray.some((p) => usableWidth - p.usedWidth > 50)
+        ) {
+          const totalUseful = totalInputWeight - totalScrapWeight;
+          foundSuggestions = generateSuggestions(
+            patternsArray,
+            usableWidth,
+            totalUseful,
+            totalInputWeight
+          );
         }
-      });
 
-      const patternsArray = Object.values(patternsMap).sort(
-        (a, b) => b.count - a.count
-      );
+        setResults({
+          patterns: patternsArray,
+          demandAnalysis,
+          stats: {
+            totalCoils: allUsedCoils.length,
+            totalInputWeight,
+            efficiency: efficiency.toFixed(2),
+            totalScrapWeight: totalScrapWeight.toFixed(1),
+            scrapPercent: scrapPercent.toFixed(2),
+          },
+        });
 
-      let totalInputWeight = 0;
-      let totalScrapWeight = 0;
-
-      patternsArray.forEach((p) => {
-        const patternInputWeight = p.assignedCoils.reduce(
-          (acc, c) => acc + c.weight,
-          0
-        );
-        const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
-          return acc + getStripWeight(p.usedWidth, safeMotherWidth, c.weight);
-        }, 0);
-
-        p.scrapWeight = patternInputWeight - patternUsefulWeight;
-        totalInputWeight += patternInputWeight;
-        totalScrapWeight += p.scrapWeight;
-      });
-
-      const efficiency =
-        totalInputWeight > 0
-          ? ((totalInputWeight - totalScrapWeight) / totalInputWeight) * 100
-          : 0;
-
-      let foundSuggestions = [];
-      if (
-        efficiency < 97 ||
-        patternsArray.some((p) => usableWidth - p.usedWidth > 50)
-      ) {
-        const totalUseful = totalInputWeight - totalScrapWeight;
-        foundSuggestions = generateSuggestions(
-          patternsArray,
-          usableWidth,
-          totalUseful,
-          totalInputWeight
-        );
+        setSuggestions(foundSuggestions);
+      } catch (err) {
+        console.error("Erro ao calcular plano", err);
+        setWeightAlert({
+          msg: "Erro ao gerar o plano de corte.",
+          subMsg:
+            "Revise os dados ou recarregue a página e tente novamente.",
+        });
+      } finally {
+        setIsCalculating(false);
       }
-
-      setResults({
-        patterns: patternsArray,
-        demandAnalysis,
-        stats: {
-          totalCoils: allUsedCoils.length,
-          totalInputWeight,
-          efficiency: efficiency.toFixed(2),
-          totalScrapWeight: totalScrapWeight.toFixed(1),
-        },
-      });
-
-      setSuggestions(foundSuggestions);
-      setIsCalculating(false);
     }, 600);
   };
 
@@ -776,7 +910,8 @@ export default function SlitterOptimizer() {
         </div>
         <div class="summary-box">
           <div class="summary-label" style="color:#b91c1c;">Sucata</div>
-          <div class="summary-val" style="color:#b91c1c;">${results.stats.totalScrapWeight} kg</div>
+          <div class="summary-val" style="color:#b91c1c;">${results.stats.scrapPercent}%</div>
+          <div class="summary-label" style="color:#b91c1c;">(${results.stats.totalScrapWeight} kg)</div>
         </div>
       </div>
     `;
@@ -1298,15 +1433,17 @@ export default function SlitterOptimizer() {
                     </p>
                   </div>
 
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">
-                      Sucata Total
-                    </p>
-                    <p className="text-3xl font-bold text-red-400">
-                      {results.stats.totalScrapWeight}
-                      <span className="text-sm text-zinc-500">kg</span>
-                    </p>
-                  </div>
+                <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
+                  <p className="text-xs text-zinc-400 uppercase font-bold">
+                    Sucata Total
+                  </p>
+                  <p className="text-3xl font-bold text-red-400">
+                    {results.stats.scrapPercent}%
+                  </p>
+                  <p className="text-xs text-red-300">
+                    {results.stats.totalScrapWeight} kg
+                  </p>
+                </div>
 
                   <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800 overflow-y-auto max-h-[110px]">
                     <p className="text-xs text-zinc-400 uppercase font-bold mb-1">
@@ -1511,6 +1648,81 @@ export default function SlitterOptimizer() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mt-8 space-y-3">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-300" />
+                <h4 className="text-sm font-bold text-zinc-100">Salvar preset</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Guarda largura, refilo, bobinas e pedidos para reutilizar em outra sessão.
+              </p>
+              <button
+                onClick={savePreset}
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white border border-blue-500/50 transition"
+              >
+                Salvar no navegador
+              </button>
+            </div>
+
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-300" />
+                <h4 className="text-sm font-bold text-zinc-100">Recuperar preset</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Restaura a última configuração salva para continuar de onde parou.
+              </p>
+              <button
+                onClick={loadPreset}
+                disabled={!hasSavedPreset}
+                className="px-3 py-2 text-xs font-semibold rounded-lg border transition disabled:bg-zinc-800 disabled:text-zinc-500 disabled:border-zinc-800 bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500/50"
+              >
+                {hasSavedPreset ? "Carregar preset salvo" : "Nenhum preset salvo"}
+              </button>
+            </div>
+
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-orange-300" />
+                <h4 className="text-sm font-bold text-zinc-100">Plano demo</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Carrega um exemplo pronto de BQ 2,00mm com pedidos e bobinas para testar o cálculo na hora.
+              </p>
+              <button
+                onClick={loadDemoPlan}
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-orange-600 hover:bg-orange-500 text-white border border-orange-500/50 transition"
+              >
+                Preencher com exemplo
+              </button>
+            </div>
+
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-zinc-200" />
+                <h4 className="text-sm font-bold text-zinc-100">Limpar tudo</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Restaura os valores padrão e limpa demandas/resultados para começar um novo corte.
+              </p>
+              <button
+                onClick={clearAll}
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 transition"
+              >
+                Resetar configurações
+              </button>
+            </div>
+          </div>
+
+          {presetStatus && (
+            <div className="text-xs text-zinc-300 bg-zinc-900/70 border border-zinc-800 rounded-xl p-3">
+              {presetStatus}
+            </div>
+          )}
         </div>
 
         <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
