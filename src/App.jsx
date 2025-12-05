@@ -142,10 +142,17 @@ const parseCSV = (csvText) => {
     if (isNumericLike(c2) && isNumericLike(c3)) {
       // === FORMATO ANTIGO ===
       code = clean(c0);
-      history = normalizeNumber(c2);
-      width = normalizeNumber(c3);
-      thickness = normalizeNumber(c4);
-      type = clean(c5);
+      const legacyTail = matches.slice(-3);
+      const legacyWidth = legacyTail[0];
+      const legacyThickness = legacyTail[1];
+      const legacyType = legacyTail[2];
+
+      const legacyHistoryCandidate = matches[matches.length - 4] ?? c2;
+
+      history = normalizeNumber(legacyHistoryCandidate);
+      width = normalizeNumber(legacyWidth);
+      thickness = normalizeNumber(legacyThickness);
+      type = clean(legacyType);
     } else {
       // === FORMATO NOVO ===
       code = clean(c0);
@@ -214,7 +221,15 @@ export default function SlitterOptimizer() {
   }, [coilThickness, coilType, activeDb]);
 
   const availableTypes = useMemo(() => {
-    const types = new Set(activeDb.map((i) => i.type));
+    const normalizeType = (raw) => String(raw ?? "").replace(/"/g, "").trim().toUpperCase();
+    const isNumericType = (t) => !Number.isNaN(Number(t));
+
+    const types = new Set(
+      activeDb
+        .map((i) => normalizeType(i.type))
+        .filter((t) => t && !isNumericType(t))
+    );
+
     return Array.from(types).sort();
   }, [activeDb]);
 
@@ -227,11 +242,11 @@ export default function SlitterOptimizer() {
     }
   }, [availableProducts, selectedProductCode]);
 
-  const getStripWeight = (width, mWidth, mWeight) => {
-    if (!mWidth || !mWeight) return 0;
-    const safeWidth = Number(mWidth) || 0;
+  const getStripWeight = (width, usableMotherWidth, mWeight) => {
+    if (!usableMotherWidth || !mWeight) return 0;
+    const safeWidth = Number(usableMotherWidth) || 0;
     const safeWeight = Number(mWeight) || 0;
-    if (safeWidth === 0 || safeWeight === 0) return 0;
+    if (safeWidth <= 0 || safeWeight === 0) return 0;
     return (width / safeWidth) * safeWeight;
   };
 
@@ -314,6 +329,8 @@ export default function SlitterOptimizer() {
   const findBestCombinations = (targetWidth, products) => {
     let candidates = [];
     const sortedProducts = [...products].sort((a, b) => b.width - a.width);
+    const maxComboSize = 4; // permitir combos menores e maiores para preencher melhor o espaço
+    const maxCandidates = 1500;
 
     const search = (currentCombo, currentWidth, startIndex) => {
       if (currentCombo.length > 0) {
@@ -323,7 +340,7 @@ export default function SlitterOptimizer() {
           waste: targetWidth - currentWidth,
         });
       }
-      if (currentCombo.length >= 3) return;
+      if (currentCombo.length >= maxComboSize) return;
 
       for (let i = startIndex; i < sortedProducts.length; i++) {
         const p = sortedProducts[i];
@@ -331,7 +348,7 @@ export default function SlitterOptimizer() {
           currentCombo.push(p);
           search(currentCombo, currentWidth + p.width, i);
           currentCombo.pop();
-          if (candidates.length > 500) return;
+          if (candidates.length > maxCandidates) return;
         }
       }
     };
@@ -395,7 +412,7 @@ export default function SlitterOptimizer() {
                 pattern.assignedCoils.reduce((cAcc, coil) => {
                   return (
                     cAcc +
-                    getStripWeight(item.width, motherWidth, coil.weight)
+                    getStripWeight(item.width, usableWidth, coil.weight)
                   );
                 }, 0)
               );
@@ -411,7 +428,7 @@ export default function SlitterOptimizer() {
               weightToAdd: pattern.assignedCoils.reduce((cAcc, coil) => {
                 return (
                   cAcc +
-                  getStripWeight(item.width, motherWidth, coil.weight)
+                  getStripWeight(item.width, usableWidth, coil.weight)
                 );
               }, 0),
             }));
@@ -421,7 +438,6 @@ export default function SlitterOptimizer() {
               totalWidth: combData.totalWidth,
               remainingWaste: waste - combData.totalWidth,
               projectedEfficiency,
-              totalWeightToAdd: comboWeightToAdd,
               totalWeightToAdd: comboWeightToAdd,
             };
           });
@@ -469,7 +485,7 @@ export default function SlitterOptimizer() {
     setTimeout(() => {
       const safeMotherWidth = Number(motherWidth);
       const safeTrim = Number(trim) || 0;
-      const usableWidth = safeMotherWidth - safeTrim;
+      const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
 
       let allItems = [];
       const demandAnalysis = {};
@@ -479,7 +495,7 @@ export default function SlitterOptimizer() {
       demands.forEach((d) => {
         const estimatedStripWeight = getStripWeight(
           d.width,
-          safeMotherWidth,
+          usableWidth,
           avgCoilWeight
         );
         const safeStripWeight =
@@ -567,7 +583,7 @@ export default function SlitterOptimizer() {
         sortedItems.forEach((item) => {
           const realStripWeight = getStripWeight(
             item.width,
-            safeMotherWidth,
+            usableWidth,
             coil.weight
           );
           if (demandAnalysis[item.width]) {
@@ -617,7 +633,7 @@ export default function SlitterOptimizer() {
           0
         );
         const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
-          return acc + getStripWeight(p.usedWidth, safeMotherWidth, c.weight);
+          return acc + getStripWeight(p.usedWidth, usableWidth, c.weight);
         }, 0);
 
         p.scrapWeight = patternInputWeight - patternUsefulWeight;
