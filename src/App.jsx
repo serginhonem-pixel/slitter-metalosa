@@ -191,6 +191,45 @@ const COLORS = [
   "bg-orange-500",
 ];
 
+const IMPROVEMENT_IDEAS = [
+  {
+    icon: Database,
+    title: "Biblioteca de setups salvos",
+    description:
+      "Salvar e recuperar presets de largura, refilo, bobinas e pedidos para repetir planos recorrentes sem reconfigurar tudo.",
+  },
+  {
+    icon: TrendingUp,
+    title: "Histórico com KPIs",
+    description:
+      "Guardar execuções com eficiência, sucata e produtos cortados para comparar turnos e ver evolução por material.",
+  },
+  {
+    icon: Settings,
+    title: "Regras de priorização",
+    description:
+      "Permitir pesos mínimos por produto, travar refilo máximo e escolher se otimiza para menos setups ou menor sucata.",
+  },
+  {
+    icon: Printer,
+    title: "Layout de impressão simplificado",
+    description:
+      "Gerar etiqueta/setups compactos para o chão de fábrica, com QR ou código para abrir o plano completo na tela.",
+  },
+  {
+    icon: AlertTriangle,
+    title: "Alertas operacionais",
+    description:
+      "Avisar quando a demanda exceder estoque ou quando a largura útil não comportar algum item antes de calcular.",
+  },
+  {
+    icon: Box,
+    title: "Integração de estoque",
+    description:
+      "Ler bobinas disponíveis de um CSV/ERP e devolver o plano com o consumo de cada bobina para baixar estoque automaticamente.",
+  },
+];
+
 export default function SlitterOptimizer() {
   const [motherWidth, setMotherWidth] = useState(1200);
   const [stockCoils, setStockCoils] = useState([{ id: 1, weight: 10000 }]);
@@ -1527,6 +1566,28 @@ export default function SlitterOptimizer() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {IMPROVEMENT_IDEAS.map(({ icon: Icon, title, description }) => (
+            <div
+              key={title}
+              className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex gap-3 items-start"
+            >
+              <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
+                <Icon className="w-5 h-5 text-blue-300" />
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-zinc-100 mb-1">
+                  {title}
+                </h4>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {description}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
 
         <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
