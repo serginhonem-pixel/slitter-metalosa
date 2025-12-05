@@ -485,6 +485,8 @@ export default function SlitterOptimizer() {
   const findBestCombinations = (targetWidth, products) => {
     let candidates = [];
     const sortedProducts = [...products].sort((a, b) => b.width - a.width);
+    const maxComboSize = 4;
+    const maxCandidates = 1500;
 
     const search = (currentCombo, currentWidth, startIndex) => {
       if (currentCombo.length > 0) {
@@ -494,7 +496,7 @@ export default function SlitterOptimizer() {
           waste: targetWidth - currentWidth,
         });
       }
-      if (currentCombo.length >= 3) return;
+      if (currentCombo.length >= maxComboSize) return;
 
       for (let i = startIndex; i < sortedProducts.length; i++) {
         const p = sortedProducts[i];
@@ -502,7 +504,7 @@ export default function SlitterOptimizer() {
           currentCombo.push(p);
           search(currentCombo, currentWidth + p.width, i);
           currentCombo.pop();
-          if (candidates.length > 500) return;
+          if (candidates.length > maxCandidates) return;
         }
       }
     };
@@ -565,7 +567,7 @@ export default function SlitterOptimizer() {
                 acc +
                 pattern.assignedCoils.reduce((cAcc, coil) => {
                   return (
-                    cAcc + getStripWeight(item.width, motherWidth, coil.weight)
+                    cAcc + getStripWeight(item.width, usableWidth, coil.weight)
                   );
                 }, 0)
               );
@@ -580,7 +582,7 @@ export default function SlitterOptimizer() {
               ...item,
               weightToAdd: pattern.assignedCoils.reduce((cAcc, coil) => {
                 return (
-                  cAcc + getStripWeight(item.width, motherWidth, coil.weight)
+                  cAcc + getStripWeight(item.width, usableWidth, coil.weight)
                 );
               }, 0),
             }));
