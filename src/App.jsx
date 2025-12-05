@@ -191,45 +191,6 @@ const COLORS = [
   "bg-orange-500",
 ];
 
-const IMPROVEMENT_IDEAS = [
-  {
-    icon: Database,
-    title: "Biblioteca de setups salvos",
-    description:
-      "Salvar e recuperar presets de largura, refilo, bobinas e pedidos para repetir planos recorrentes sem reconfigurar tudo.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Histórico com KPIs",
-    description:
-      "Guardar execuções com eficiência, sucata e produtos cortados para comparar turnos e ver evolução por material.",
-  },
-  {
-    icon: Settings,
-    title: "Regras de priorização",
-    description:
-      "Permitir pesos mínimos por produto, travar refilo máximo e escolher se otimiza para menos setups ou menor sucata.",
-  },
-  {
-    icon: Printer,
-    title: "Layout de impressão simplificado",
-    description:
-      "Gerar etiqueta/setups compactos para o chão de fábrica, com QR ou código para abrir o plano completo na tela.",
-  },
-  {
-    icon: AlertTriangle,
-    title: "Alertas operacionais",
-    description:
-      "Avisar quando a demanda exceder estoque ou quando a largura útil não comportar algum item antes de calcular.",
-  },
-  {
-    icon: Box,
-    title: "Integração de estoque",
-    description:
-      "Ler bobinas disponíveis de um CSV/ERP e devolver o plano com o consumo de cada bobina para baixar estoque automaticamente.",
-  },
-];
-
 export default function SlitterOptimizer() {
   const [motherWidth, setMotherWidth] = useState(1200);
   const [stockCoils, setStockCoils] = useState([{ id: 1, weight: 10000 }]);
@@ -246,6 +207,8 @@ export default function SlitterOptimizer() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [showDb, setShowDb] = useState(false);
   const [weightAlert, setWeightAlert] = useState(null);
+  const [presetStatus, setPresetStatus] = useState("");
+  const [hasSavedPreset, setHasSavedPreset] = useState(false);
 
   const activeDb = useMemo(() => parseCSV(DEFAULT_CSV_DATA), []);
 
@@ -281,9 +244,9 @@ export default function SlitterOptimizer() {
     }
   }, [availableProducts, selectedProductCode]);
 
-  const getStripWeight = (width, usableMotherWidth, mWeight) => {
-    if (!usableMotherWidth || !mWeight) return 0;
-    const safeWidth = Number(usableMotherWidth) || 0;
+  const getStripWeight = (width, mWidth, mWeight) => {
+    if (!mWidth || !mWeight) return 0;
+    const safeWidth = Number(mWidth) || 0;
     const safeWeight = Number(mWeight) || 0;
     if (safeWidth <= 0 || safeWeight === 0) return 0;
     return (width / safeWidth) * safeWeight;
@@ -343,6 +306,12 @@ export default function SlitterOptimizer() {
     setWeightAlert(null);
   };
 
+  const resetOutputs = () => {
+    setResults(null);
+    setSuggestions([]);
+    setWeightAlert(null);
+  };
+
   const addComboDemand = (items) => {
     const newItems = items.map((item, idx) => ({
       id: Date.now() + idx,
@@ -363,6 +332,92 @@ export default function SlitterOptimizer() {
     setResults(null);
     setSuggestions([]);
     setWeightAlert(null);
+  };
+
+  const savePreset = () => {
+    const payload = {
+      motherWidth,
+      stockCoils,
+      trim,
+      coilThickness,
+      coilType,
+      demands,
+    };
+
+    try {
+      localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(payload));
+      setPresetStatus("Preset salvo localmente.");
+      setHasSavedPreset(true);
+    } catch (err) {
+      console.error(err);
+      setPresetStatus("Não foi possível salvar o preset.");
+    }
+  };
+
+  const loadPreset = () => {
+    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+    if (!raw) {
+      setPresetStatus("Nenhum preset salvo ainda.");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      setMotherWidth(parsed.motherWidth ?? 1200);
+      setStockCoils(parsed.stockCoils ?? [{ id: 1, weight: 10000 }]);
+      setTrim(parsed.trim ?? 20);
+      setCoilThickness(parsed.coilThickness ?? 2.0);
+      setCoilType(parsed.coilType ?? "BQ");
+      setDemands(parsed.demands ?? []);
+      resetOutputs();
+      setPresetStatus("Preset recuperado com sucesso.");
+    } catch (err) {
+      console.error(err);
+      setPresetStatus("Erro ao carregar preset salvo.");
+    }
+  };
+
+  const loadDemoPlan = () => {
+    const demoType = "BQ";
+    const demoThickness = 2.0;
+    const demoProducts = activeDb
+      .filter(
+        (p) =>
+          p.type.toUpperCase() === demoType &&
+          Math.abs(p.thickness - demoThickness) < 0.05
+      )
+      .slice(0, 3);
+
+    const demoDemands = demoProducts.map((p, idx) => ({
+      id: Date.now() + idx,
+      code: p.code,
+      desc: p.desc,
+      width: p.width,
+      targetWeight: 3500 + idx * 500,
+    }));
+
+    setMotherWidth(1200);
+    setTrim(20);
+    setCoilThickness(demoThickness);
+    setCoilType(demoType);
+    setStockCoils([
+      { id: 1, weight: 9000 },
+      { id: 2, weight: 7200 },
+    ]);
+    setDemands(demoDemands);
+    resetOutputs();
+    setPresetStatus("Plano demo carregado. Ajuste e clique em Gerar Plano.");
+  };
+
+  const clearAll = () => {
+    setMotherWidth(1200);
+    setStockCoils([{ id: 1, weight: 10000 }]);
+    setTrim(20);
+    setCoilThickness(2.0);
+    setCoilType("BQ");
+    setDemands([]);
+    resetOutputs();
+    setPresetStatus("Configurações resetadas.");
   };
 
   const findBestCombinations = (targetWidth, products) => {
@@ -1566,28 +1621,6 @@ export default function SlitterOptimizer() {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="mt-8 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {IMPROVEMENT_IDEAS.map(({ icon: Icon, title, description }) => (
-            <div
-              key={title}
-              className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex gap-3 items-start"
-            >
-              <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800">
-                <Icon className="w-5 h-5 text-blue-300" />
-              </div>
-
-              <div>
-                <h4 className="text-sm font-bold text-zinc-100 mb-1">
-                  {title}
-                </h4>
-                <p className="text-xs text-zinc-400 leading-relaxed">
-                  {description}
-                </p>
-              </div>
-            </div>
-          ))}
         </div>
 
         <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
