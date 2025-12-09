@@ -126,35 +126,22 @@ const parseCSV = (csvText) => {
     const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
     if (!matches || matches.length < 6) return;
 
-    // tokens crus
     const [c0, c1, c2, c3, c4, c5] = matches;
-
     const desc = clean(c1);
-
     let code, type, thickness, width, history;
 
-    // Detecta formato antigo ou novo pela 3ª coluna
-    // Formato ANTIGO:
-    //   code, desc, history, width, thickness, type
-    //
-    // Formato NOVO:
-    //   code, desc, type, thickness, width, history
     if (isNumericLike(c2) && isNumericLike(c3)) {
-      // === FORMATO ANTIGO ===
       code = clean(c0);
       const legacyTail = matches.slice(-3);
       const legacyWidth = legacyTail[0];
       const legacyThickness = legacyTail[1];
       const legacyType = legacyTail[2];
-
       const legacyHistoryCandidate = matches[matches.length - 4] ?? c2;
-
       history = normalizeNumber(legacyHistoryCandidate);
       width = normalizeNumber(legacyWidth);
       thickness = normalizeNumber(legacyThickness);
       type = clean(legacyType);
     } else {
-      // === FORMATO NOVO ===
       code = clean(c0);
       type = clean(c2);
       thickness = normalizeNumber(c3);
@@ -164,20 +151,11 @@ const parseCSV = (csvText) => {
 
     if (Number.isNaN(width) || Number.isNaN(thickness)) return;
 
-    parsed.push({
-      code,
-      desc,
-      type,
-      thickness,
-      width,
-      history,
-    });
+    parsed.push({ code, desc, type, thickness, width, history });
   });
 
   return parsed;
 };
-
-
 
 const COLORS = [
   "bg-blue-500",
@@ -190,6 +168,8 @@ const COLORS = [
   "bg-teal-500",
   "bg-orange-500",
 ];
+
+const PRESET_STORAGE_KEY = "slitter-preset-v1";
 
 export default function SlitterOptimizer() {
   const [motherWidth, setMotherWidth] = useState(1200);
@@ -225,30 +205,30 @@ export default function SlitterOptimizer() {
   const availableTypes = useMemo(() => {
     const normalizeType = (raw) => String(raw ?? "").replace(/"/g, "").trim().toUpperCase();
     const isNumericType = (t) => !Number.isNaN(Number(t));
-
     const types = new Set(
-      activeDb
-        .map((i) => normalizeType(i.type))
-        .filter((t) => t && !isNumericType(t))
+      activeDb.map((i) => normalizeType(i.type)).filter((t) => t && !isNumericType(t))
     );
-
     return Array.from(types).sort();
   }, [activeDb]);
 
   useEffect(() => {
     if (selectedProductCode) {
-      const stillValid = availableProducts.some(
-        (p) => p.code === selectedProductCode
-      );
+      const stillValid = availableProducts.some((p) => p.code === selectedProductCode);
       if (!stillValid) setSelectedProductCode("");
     }
   }, [availableProducts, selectedProductCode]);
 
-  const getStripWeight = (width, mWidth, mWeight) => {
-    if (!mWidth || !mWeight) return 0;
-    const safeWidth = Number(mWidth) || 0;
+  useEffect(() => {
+    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+    setHasSavedPreset(Boolean(raw));
+  }, []);
+
+  const getStripWeight = (width, motherWidthRef, mWeight) => {
+    if (!motherWidthRef || !mWeight) return 0;
+    const safeWidth = Number(motherWidthRef) || 0;
     const safeWeight = Number(mWeight) || 0;
     if (safeWidth <= 0 || safeWeight === 0) return 0;
+    // O cálculo de peso deve ser baseado na largura TOTAL da bobina mãe
     return (width / safeWidth) * safeWeight;
   };
 
@@ -259,9 +239,7 @@ export default function SlitterOptimizer() {
   const updateStockCoil = (id, val) => {
     const w = parseFloat(val);
     setStockCoils(
-      stockCoils.map((c) =>
-        c.id === id ? { ...c, weight: isNaN(w) ? 0 : w } : c
-      )
+      stockCoils.map((c) => (c.id === id ? { ...c, weight: isNaN(w) ? 0 : w } : c))
     );
   };
 
@@ -310,6 +288,7 @@ export default function SlitterOptimizer() {
     setResults(null);
     setSuggestions([]);
     setWeightAlert(null);
+    setIsCalculating(false);
   };
 
   const addComboDemand = (items) => {
@@ -400,10 +379,7 @@ export default function SlitterOptimizer() {
     setTrim(20);
     setCoilThickness(demoThickness);
     setCoilType(demoType);
-    setStockCoils([
-      { id: 1, weight: 9000 },
-      { id: 2, weight: 7200 },
-    ]);
+    setStockCoils([{ id: 1, weight: 9000 }, { id: 2, weight: 7200 }]);
     setDemands(demoDemands);
     resetOutputs();
     setPresetStatus("Plano demo carregado. Ajuste e clique em Gerar Plano.");
@@ -423,7 +399,7 @@ export default function SlitterOptimizer() {
   const findBestCombinations = (targetWidth, products) => {
     let candidates = [];
     const sortedProducts = [...products].sort((a, b) => b.width - a.width);
-    const maxComboSize = 4; // permitir combos menores e maiores para preencher melhor o espaço
+    const maxComboSize = 4;
     const maxCandidates = 1500;
 
     const search = (currentCombo, currentWidth, startIndex) => {
@@ -460,10 +436,7 @@ export default function SlitterOptimizer() {
     const seenSignatures = new Set();
 
     for (const res of candidates) {
-      const signature = res.combo
-        .map((c) => c.code)
-        .sort()
-        .join("+");
+      const signature = res.combo.map((c) => c.code).sort().join("+");
       if (!seenSignatures.has(signature)) {
         seenSignatures.add(signature);
         uniqueResults.push(res);
@@ -474,29 +447,18 @@ export default function SlitterOptimizer() {
     return uniqueResults;
   };
 
-  const generateSuggestions = (
-    patterns,
-    usableWidth,
-    currentTotalUsefulWeight,
-    currentTotalInputWeight
-  ) => {
+  const generateSuggestions = (patterns, usableWidth, currentTotalUsefulWeight, currentTotalInputWeight, safeMotherWidth) => {
     const potentialSuggestions = [];
 
     patterns.forEach((pattern) => {
       const waste = usableWidth - pattern.usedWidth;
-
       const validProductsForSuggestions = availableProducts;
       if (!validProductsForSuggestions.length) return;
 
-      const minProductWidth = Math.min(
-        ...validProductsForSuggestions.map((p) => p.width)
-      );
+      const minProductWidth = Math.min(...validProductsForSuggestions.map((p) => p.width));
 
       if (waste >= minProductWidth) {
-        const combinations = findBestCombinations(
-          waste,
-          validProductsForSuggestions
-        );
+        const combinations = findBestCombinations(waste, validProductsForSuggestions);
 
         if (combinations.length > 0) {
           const smartSuggestions = combinations.map((combData) => {
@@ -504,26 +466,18 @@ export default function SlitterOptimizer() {
               return (
                 acc +
                 pattern.assignedCoils.reduce((cAcc, coil) => {
-                  return (
-                    cAcc +
-                    getStripWeight(item.width, usableWidth, coil.weight)
-                  );
+                  return cAcc + getStripWeight(item.width, safeMotherWidth, coil.weight);
                 }, 0)
               );
             }, 0);
 
             const projectedEfficiency =
-              ((currentTotalUsefulWeight + comboWeightToAdd) /
-                currentTotalInputWeight) *
-              100;
+              ((currentTotalUsefulWeight + comboWeightToAdd) / currentTotalInputWeight) * 100;
 
             const itemsWithWeights = combData.combo.map((item) => ({
               ...item,
               weightToAdd: pattern.assignedCoils.reduce((cAcc, coil) => {
-                return (
-                  cAcc +
-                  getStripWeight(item.width, usableWidth, coil.weight)
-                );
+                return cAcc + getStripWeight(item.width, safeMotherWidth, coil.weight);
               }, 0),
             }));
 
@@ -559,14 +513,8 @@ export default function SlitterOptimizer() {
     setSuggestions([]);
     setWeightAlert(null);
 
-    const totalDemandWeight = demands.reduce(
-      (acc, d) => acc + d.targetWeight,
-      0
-    );
-    const totalAvailableWeight = stockCoils.reduce(
-      (acc, c) => acc + c.weight,
-      0
-    );
+    const totalDemandWeight = demands.reduce((acc, d) => acc + d.targetWeight, 0);
+    const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
 
     if (totalDemandWeight > totalAvailableWeight) {
       const diff = totalDemandWeight - totalAvailableWeight;
@@ -577,196 +525,192 @@ export default function SlitterOptimizer() {
     }
 
     setTimeout(() => {
-      const safeMotherWidth = Number(motherWidth);
-      const safeTrim = Number(trim) || 0;
-      const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
+      try {
+        const safeMotherWidth = Number(motherWidth);
+        const safeTrim = Number(trim) || 0;
+        const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
 
-      let allItems = [];
-      const demandAnalysis = {};
+        let allItems = [];
+        const demandAnalysis = {};
+        const avgCoilWeight = totalAvailableWeight / stockCoils.length;
 
-      const avgCoilWeight = totalAvailableWeight / stockCoils.length;
+        demands.forEach((d) => {
+          // CORREÇÃO: Usar safeMotherWidth no lugar de usableWidth para cálculo de peso real
+          const estimatedStripWeight = getStripWeight(d.width, safeMotherWidth, avgCoilWeight);
+          const safeStripWeight = estimatedStripWeight > 0 ? estimatedStripWeight : 1;
+          const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
 
-      demands.forEach((d) => {
-        const estimatedStripWeight = getStripWeight(
-          d.width,
-          usableWidth,
-          avgCoilWeight
-        );
-        const safeStripWeight =
-          estimatedStripWeight > 0 ? estimatedStripWeight : 1;
-        const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
+          demandAnalysis[d.width] = {
+            reqWeight: d.targetWeight,
+            producedQty: 0,
+            producedWeight: 0,
+            desc: d.desc,
+          };
 
-        demandAnalysis[d.width] = {
-          reqWeight: d.targetWeight,
-          producedQty: 0,
-          producedWeight: 0,
-          desc: d.desc,
-        };
-
-        for (let i = 0; i < qtyNeeded; i++) {
-          allItems.push({ width: d.width, desc: d.desc, code: d.code });
-        }
-      });
-
-      allItems.sort((a, b) => b.width - a.width);
-
-      let availableCoils = [...stockCoils].map((c) => ({
-        ...c,
-        items: [],
-        currentWidth: 0,
-      }));
-      let virtualCoils = [];
-
-      allItems.forEach((item) => {
-        let bestCoilIndex = -1;
-        let minSpaceLeft = usableWidth + 1;
-
-        for (let i = 0; i < availableCoils.length; i++) {
-          const spaceLeft = usableWidth - availableCoils[i].currentWidth;
-          if (spaceLeft >= item.width) {
-            const potentialSpaceLeft = spaceLeft - item.width;
-            if (potentialSpaceLeft < minSpaceLeft) {
-              minSpaceLeft = potentialSpaceLeft;
-              bestCoilIndex = i;
-            }
+          for (let i = 0; i < qtyNeeded; i++) {
+            allItems.push({ width: d.width, desc: d.desc, code: d.code });
           }
-        }
+        });
 
-        if (bestCoilIndex !== -1) {
-          availableCoils[bestCoilIndex].items.push(item);
-          availableCoils[bestCoilIndex].currentWidth += item.width;
-        } else {
-          let bestVirtualIndex = -1;
-          let minVirtualSpace = usableWidth + 1;
+        allItems.sort((a, b) => b.width - a.width);
 
-          for (let j = 0; j < virtualCoils.length; j++) {
-            const vSpaceLeft = usableWidth - virtualCoils[j].currentWidth;
-            if (vSpaceLeft >= item.width) {
-              if (vSpaceLeft - item.width < minVirtualSpace) {
-                minVirtualSpace = vSpaceLeft - item.width;
-                bestVirtualIndex = j;
+        let availableCoils = [...stockCoils].map((c) => ({
+          ...c,
+          items: [],
+          currentWidth: 0,
+        }));
+        let virtualCoils = [];
+
+        allItems.forEach((item) => {
+          let bestCoilIndex = -1;
+          let minSpaceLeft = usableWidth + 1;
+
+          for (let i = 0; i < availableCoils.length; i++) {
+            const spaceLeft = usableWidth - availableCoils[i].currentWidth;
+            if (spaceLeft >= item.width) {
+              const potentialSpaceLeft = spaceLeft - item.width;
+              if (potentialSpaceLeft < minSpaceLeft) {
+                minSpaceLeft = potentialSpaceLeft;
+                bestCoilIndex = i;
               }
             }
           }
 
-          if (bestVirtualIndex !== -1) {
-            virtualCoils[bestVirtualIndex].items.push(item);
-            virtualCoils[bestVirtualIndex].currentWidth += item.width;
+          if (bestCoilIndex !== -1) {
+            availableCoils[bestCoilIndex].items.push(item);
+            availableCoils[bestCoilIndex].currentWidth += item.width;
           } else {
-            virtualCoils.push({
-              id: `v-${Date.now()}-${Math.random()}`,
-              weight: 10000,
-              items: [item],
-              currentWidth: item.width,
-              isVirtual: true,
-            });
-          }
-        }
-      });
+            let bestVirtualIndex = -1;
+            let minVirtualSpace = usableWidth + 1;
 
-      const allUsedCoils = [
-        ...availableCoils.filter((c) => c.items.length > 0),
-        ...virtualCoils,
-      ];
+            for (let j = 0; j < virtualCoils.length; j++) {
+              const vSpaceLeft = usableWidth - virtualCoils[j].currentWidth;
+              if (vSpaceLeft >= item.width) {
+                if (vSpaceLeft - item.width < minVirtualSpace) {
+                  minVirtualSpace = vSpaceLeft - item.width;
+                  bestVirtualIndex = j;
+                }
+              }
+            }
 
-      const patternsMap = {};
-      allUsedCoils.forEach((coil, index) => {
-        const sortedItems = [...coil.items].sort((a, b) => b.width - a.width);
-        const key = JSON.stringify(sortedItems.map((i) => i.width));
-
-        sortedItems.forEach((item) => {
-          const realStripWeight = getStripWeight(
-            item.width,
-            usableWidth,
-            coil.weight
-          );
-          if (demandAnalysis[item.width]) {
-            demandAnalysis[item.width].producedQty++;
-            demandAnalysis[item.width].producedWeight += realStripWeight;
+            if (bestVirtualIndex !== -1) {
+              virtualCoils[bestVirtualIndex].items.push(item);
+              virtualCoils[bestVirtualIndex].currentWidth += item.width;
+            } else {
+              virtualCoils.push({
+                id: `v-${Date.now()}-${Math.random()}`,
+                weight: 10000,
+                items: [item],
+                currentWidth: item.width,
+                isVirtual: true,
+              });
+            }
           }
         });
 
-        if (patternsMap[key]) {
-          patternsMap[key].count++;
-          patternsMap[key].assignedCoils.push(coil);
-        } else {
-          const usedWidth = sortedItems.reduce((a, b) => a + b.width, 0);
-          let currentPos = 0;
-          const setupCoordinates = sortedItems.map((item) => {
-            const start = currentPos;
-            currentPos += item.width;
-            return {
-              start,
-              end: currentPos,
-              width: item.width,
-              desc: item.desc,
-            };
+        const allUsedCoils = [...availableCoils.filter((c) => c.items.length > 0), ...virtualCoils];
+
+        const patternsMap = {};
+        allUsedCoils.forEach((coil, index) => {
+          const sortedItems = [...coil.items].sort((a, b) => b.width - a.width);
+          const key = JSON.stringify(sortedItems.map((i) => i.width));
+
+          sortedItems.forEach((item) => {
+            // CORREÇÃO: Usar safeMotherWidth
+            const realStripWeight = getStripWeight(item.width, safeMotherWidth, coil.weight);
+            if (demandAnalysis[item.width]) {
+              demandAnalysis[item.width].producedQty++;
+              demandAnalysis[item.width].producedWeight += realStripWeight;
+            }
           });
 
-          patternsMap[key] = {
-            cuts: sortedItems,
-            setupCoordinates,
-            count: 1,
-            assignedCoils: [coil],
-            usedWidth,
-            index,
-          };
+          if (patternsMap[key]) {
+            patternsMap[key].count++;
+            patternsMap[key].assignedCoils.push(coil);
+          } else {
+            const usedWidth = sortedItems.reduce((a, b) => a + b.width, 0);
+            let currentPos = 0;
+            const setupCoordinates = sortedItems.map((item) => {
+              const start = currentPos;
+              currentPos += item.width;
+              return {
+                start,
+                end: currentPos,
+                width: item.width,
+                desc: item.desc,
+              };
+            });
+
+            patternsMap[key] = {
+              cuts: sortedItems,
+              setupCoordinates,
+              count: 1,
+              assignedCoils: [coil],
+              usedWidth,
+              index,
+            };
+          }
+        });
+
+        const patternsArray = Object.values(patternsMap).sort((a, b) => b.count - a.count);
+
+        let totalInputWeight = 0;
+        let totalScrapWeight = 0;
+
+        patternsArray.forEach((p) => {
+          const patternInputWeight = p.assignedCoils.reduce((acc, c) => acc + c.weight, 0);
+          const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
+            // CORREÇÃO: Usar safeMotherWidth no cálculo de eficiência
+            return acc + getStripWeight(p.usedWidth, safeMotherWidth, c.weight);
+          }, 0);
+
+          p.scrapWeight = patternInputWeight - patternUsefulWeight;
+          totalInputWeight += patternInputWeight;
+          totalScrapWeight += p.scrapWeight;
+        });
+
+        const efficiency =
+          totalInputWeight > 0
+            ? ((totalInputWeight - totalScrapWeight) / totalInputWeight) * 100
+            : 0;
+
+        const scrapPercent =
+          totalInputWeight > 0 ? (totalScrapWeight / totalInputWeight) * 100 : 0;
+
+        let foundSuggestions = [];
+        if (efficiency < 97 || patternsArray.some((p) => usableWidth - p.usedWidth > 50)) {
+          const totalUseful = totalInputWeight - totalScrapWeight;
+          foundSuggestions = generateSuggestions(
+            patternsArray,
+            usableWidth,
+            totalUseful,
+            totalInputWeight,
+            safeMotherWidth // Passando largura mãe para calcular sugestões corretamente
+          );
         }
-      });
 
-      const patternsArray = Object.values(patternsMap).sort(
-        (a, b) => b.count - a.count
-      );
+        setResults({
+          patterns: patternsArray,
+          demandAnalysis,
+          stats: {
+            totalCoils: allUsedCoils.length,
+            totalInputWeight,
+            efficiency: efficiency.toFixed(2),
+            totalScrapWeight: totalScrapWeight.toFixed(1),
+            scrapPercent: scrapPercent.toFixed(2),
+          },
+        });
 
-      let totalInputWeight = 0;
-      let totalScrapWeight = 0;
-
-      patternsArray.forEach((p) => {
-        const patternInputWeight = p.assignedCoils.reduce(
-          (acc, c) => acc + c.weight,
-          0
-        );
-        const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
-          return acc + getStripWeight(p.usedWidth, usableWidth, c.weight);
-        }, 0);
-
-        p.scrapWeight = patternInputWeight - patternUsefulWeight;
-        totalInputWeight += patternInputWeight;
-        totalScrapWeight += p.scrapWeight;
-      });
-
-      const efficiency =
-        totalInputWeight > 0
-          ? ((totalInputWeight - totalScrapWeight) / totalInputWeight) * 100
-          : 0;
-
-      let foundSuggestions = [];
-      if (
-        efficiency < 97 ||
-        patternsArray.some((p) => usableWidth - p.usedWidth > 50)
-      ) {
-        const totalUseful = totalInputWeight - totalScrapWeight;
-        foundSuggestions = generateSuggestions(
-          patternsArray,
-          usableWidth,
-          totalUseful,
-          totalInputWeight
-        );
+        setSuggestions(foundSuggestions);
+      } catch (err) {
+        console.error("Erro ao calcular plano", err);
+        setWeightAlert({
+          msg: "Erro ao gerar o plano de corte.",
+          subMsg: "Revise os dados ou recarregue a página e tente novamente.",
+        });
+      } finally {
+        setIsCalculating(false);
       }
-
-      setResults({
-        patterns: patternsArray,
-        demandAnalysis,
-        stats: {
-          totalCoils: allUsedCoils.length,
-          totalInputWeight,
-          efficiency: efficiency.toFixed(2),
-          totalScrapWeight: totalScrapWeight.toFixed(1),
-        },
-      });
-
-      setSuggestions(foundSuggestions);
-      setIsCalculating(false);
     }, 600);
   };
 
@@ -793,6 +737,7 @@ export default function SlitterOptimizer() {
         table { width:100%; border-collapse:collapse; font-size:12px;}
         th, td { padding:8px; border-bottom:1px solid #e5e7eb; }
         .scrap-row { color:#b91c1c; font-weight:700; background:#fef2f2;}
+        .trim-row { color:#4b5563; font-weight:700; background:#f3f4f6;}
         .total-summary { margin-top:28px; border-top:2px solid #111827; padding-top:14px; display:flex; gap:16px; }
         .summary-box { text-align:center; min-width:120px; }
         .summary-val { font-size:20px; font-weight:800; }
@@ -815,10 +760,9 @@ export default function SlitterOptimizer() {
     let cards = "";
     results.patterns.forEach((pattern, idx) => {
       const visualMotherWidth = Number(motherWidth);
-      const patternEfficiency = (
-        (pattern.usedWidth / visualMotherWidth) *
-        100
-      ).toFixed(1);
+      const safeTrim = Number(trim);
+      const visualUsableWidth = visualMotherWidth - safeTrim;
+      const patternEfficiency = ((pattern.usedWidth / visualMotherWidth) * 100).toFixed(1);
 
       let rows = "";
       pattern.setupCoordinates.forEach((setup, sIdx) => {
@@ -833,29 +777,39 @@ export default function SlitterOptimizer() {
         `;
       });
 
-      if (visualMotherWidth - pattern.usedWidth > 0) {
+      // Sucata REAL (Dentro da largura útil)
+      if (visualUsableWidth - pattern.usedWidth > 0.1) {
         rows += `
           <tr class="scrap-row">
             <td>REF</td>
             <td>${pattern.usedWidth} mm</td>
-            <td>${(visualMotherWidth - pattern.usedWidth).toFixed(1)} mm</td>
-            <td>${visualMotherWidth} mm</td>
-            <td>SUCATA / SOBRA (~ ${pattern.scrapWeight.toFixed(1)} kg)</td>
+            <td>${(visualUsableWidth - pattern.usedWidth).toFixed(1)} mm</td>
+            <td>${visualUsableWidth} mm</td>
+            <td>SUCATA / SOBRA</td>
           </tr>
         `;
       }
 
-      const usedWeights = pattern.assignedCoils
-        .map((c) => c.weight + "kg")
-        .join(", ");
+      // Refilo
+      if (safeTrim > 0) {
+        rows += `
+          <tr class="trim-row">
+            <td>TRIM</td>
+            <td>${visualUsableWidth} mm</td>
+            <td>${safeTrim} mm</td>
+            <td>${visualMotherWidth} mm</td>
+            <td>REFILO (Margem)</td>
+          </tr>
+        `;
+      }
+
+      const usedWeights = pattern.assignedCoils.map((c) => c.weight + "kg").join(", ");
 
       cards += `
         <div class="card">
           <div class="card-header">
             <div>
-              <span class="pattern-title">Padrão ${String.fromCharCode(
-                65 + idx
-              )}</span>
+              <span class="pattern-title">Padrão ${String.fromCharCode(65 + idx)}</span>
               <span> - ${pattern.count} bobina(s) [${usedWeights}]</span>
             </div>
             <div><strong>Efic: ${patternEfficiency}%</strong></div>
@@ -885,8 +839,9 @@ export default function SlitterOptimizer() {
           <div class="summary-val">${results.stats.efficiency}%</div>
         </div>
         <div class="summary-box">
-          <div class="summary-label" style="color:#b91c1c;">Sucata</div>
-          <div class="summary-val" style="color:#b91c1c;">${results.stats.totalScrapWeight} kg</div>
+          <div class="summary-label" style="color:#b91c1c;">Sucata Total</div>
+          <div class="summary-val" style="color:#b91c1c;">${results.stats.scrapPercent}%</div>
+          <div class="summary-label" style="color:#b91c1c;">(${results.stats.totalScrapWeight} kg)</div>
         </div>
       </div>
     `;
@@ -912,7 +867,6 @@ export default function SlitterOptimizer() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-3 md:p-5 font-sans">
       <div className="max-w-7xl mx-auto space-y-5">
-
         {/* HEADER */}
         <header className="sticky top-0 z-20 rounded-2xl bg-zinc-950/80 backdrop-blur border border-zinc-800 px-4 py-4 md:px-6 md:py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm">
           <div>
@@ -951,9 +905,7 @@ export default function SlitterOptimizer() {
           <div className="bg-yellow-950/30 border border-yellow-700/50 p-4 rounded-xl shadow-sm animate-fade-in flex items-start gap-3">
             <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-1" />
             <div>
-              <h3 className="font-bold text-yellow-200 text-lg">
-                Demanda excede estoque
-              </h3>
+              <h3 className="font-bold text-yellow-200 text-lg">Demanda excede estoque</h3>
               <p className="text-yellow-100 font-medium">{weightAlert.msg}</p>
               <p className="text-yellow-200/80 text-sm mt-1">{weightAlert.subMsg}</p>
             </div>
@@ -997,17 +949,13 @@ export default function SlitterOptimizer() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-
           {/* ESQUERDA */}
           <div className="lg:col-span-4 space-y-5">
-
             {/* CONFIG */}
             <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
               <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
                 <Settings className="w-4 h-4 text-zinc-400" />
-                <h2 className="font-semibold text-zinc-200">
-                  Configuração da Máquina
-                </h2>
+                <h2 className="font-semibold text-zinc-200">Configuração da Máquina</h2>
               </div>
 
               <div className="p-4 space-y-4">
@@ -1020,9 +968,7 @@ export default function SlitterOptimizer() {
                       type="number"
                       value={motherWidth}
                       onChange={(e) =>
-                        setMotherWidth(
-                          e.target.value === "" ? "" : parseFloat(e.target.value)
-                        )
+                        setMotherWidth(e.target.value === "" ? "" : parseFloat(e.target.value))
                       }
                       className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg"
                     />
@@ -1060,9 +1006,7 @@ export default function SlitterOptimizer() {
                   <div className="max-h-[120px] overflow-y-auto space-y-2">
                     {stockCoils.map((coil, idx) => (
                       <div key={coil.id} className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500 font-mono w-4">
-                          {idx + 1}.
-                        </span>
+                        <span className="text-xs text-zinc-500 font-mono w-4">{idx + 1}.</span>
 
                         <div className="relative flex-1">
                           <input
@@ -1071,9 +1015,7 @@ export default function SlitterOptimizer() {
                             onChange={(e) => updateStockCoil(coil.id, e.target.value)}
                             className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 text-sm pr-8"
                           />
-                          <span className="absolute right-2 top-2 text-xs text-zinc-500">
-                            kg
-                          </span>
+                          <span className="absolute right-2 top-2 text-xs text-zinc-500">kg</span>
                         </div>
 
                         <button
@@ -1119,9 +1061,7 @@ export default function SlitterOptimizer() {
                       step="0.01"
                       value={coilThickness}
                       onChange={(e) =>
-                        setCoilThickness(
-                          e.target.value === "" ? "" : parseFloat(e.target.value)
-                        )
+                        setCoilThickness(e.target.value === "" ? "" : parseFloat(e.target.value))
                       }
                       className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold"
                     />
@@ -1130,9 +1070,7 @@ export default function SlitterOptimizer() {
 
                 <div className="bg-blue-950/40 p-2 rounded-lg text-xs text-blue-200 text-center border border-blue-900/50">
                   Largura Útil:{" "}
-                  <strong>
-                    {(Number(motherWidth) || 0) - (Number(trim) || 0)} mm
-                  </strong>
+                  <strong>{(Number(motherWidth) || 0) - (Number(trim) || 0)} mm</strong>
                 </div>
               </div>
             </div>
@@ -1148,8 +1086,7 @@ export default function SlitterOptimizer() {
                 <div className="flex flex-col gap-3 mb-4">
                   <div className="w-full">
                     <label className="text-xs text-zinc-400 mb-1 block">
-                      Produto (Filtro: {coilType} |{" "}
-                      {Number(coilThickness).toFixed(2)}mm)
+                      Produto (Filtro: {coilType} | {Number(coilThickness).toFixed(2)}mm)
                     </label>
 
                     <select
@@ -1174,9 +1111,7 @@ export default function SlitterOptimizer() {
 
                   <div className="flex gap-2 items-end">
                     <div className="flex-1">
-                      <label className="text-xs text-zinc-400 mb-1 block">
-                        Peso Kg
-                      </label>
+                      <label className="text-xs text-zinc-400 mb-1 block">Peso Kg</label>
                       <input
                         type="number"
                         placeholder="kg"
@@ -1210,9 +1145,7 @@ export default function SlitterOptimizer() {
                     >
                       <div className="flex flex-col max-w-[80%]">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-zinc-100">
-                            {item.width}mm
-                          </span>
+                          <span className="font-bold text-zinc-100">{item.width}mm</span>
                           <span className="text-[10px] bg-blue-950/50 text-blue-200 px-1 rounded border border-blue-900/60 truncate">
                             {item.desc}
                           </span>
@@ -1258,7 +1191,6 @@ export default function SlitterOptimizer() {
 
           {/* DIREITA */}
           <div className="lg:col-span-8 space-y-5">
-
             {/* SUGESTÕES */}
             {suggestions.length > 0 && (
               <div className="bg-orange-950/30 border border-orange-800/60 rounded-2xl p-5 shadow-sm animate-fade-in">
@@ -1283,12 +1215,8 @@ export default function SlitterOptimizer() {
                         >
                           <div className="flex justify-between items-center mb-3 border-b border-zinc-800 pb-2">
                             <p className="text-xs font-bold text-zinc-400 uppercase">
-                              Padrão{" "}
-                              {String.fromCharCode(65 + sug.patternIndex)} - Sobra:
-                              <span className="text-red-400">
-                                {" "}
-                                {sug.waste}mm
-                              </span>
+                              Padrão {String.fromCharCode(65 + sug.patternIndex)} - Sobra:
+                              <span className="text-red-400"> {sug.waste}mm</span>
                             </p>
                             <span className="text-xs bg-zinc-900 px-2 py-1 rounded text-zinc-300 border border-zinc-800">
                               Preenche {sug.patternCount} bobinas
@@ -1331,8 +1259,7 @@ export default function SlitterOptimizer() {
                                         : "bg-yellow-950/40 text-yellow-200 border-yellow-900/50"
                                     }`}
                                   >
-                                    Eficiência:{" "}
-                                    {combo.projectedEfficiency.toFixed(2)}%
+                                    Eficiência: {combo.projectedEfficiency.toFixed(2)}%
                                   </span>
                                 </div>
 
@@ -1375,8 +1302,8 @@ export default function SlitterOptimizer() {
                   Nenhuma sugestão automática encontrada.
                 </p>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Não encontramos produtos com espessura{" "}
-                  {coilThickness.toFixed(2)}mm e tipo {coilType}.
+                  Não encontramos produtos com espessura {coilThickness.toFixed(2)}mm e tipo{" "}
+                  {coilType}.
                 </p>
               </div>
             )}
@@ -1400,21 +1327,19 @@ export default function SlitterOptimizer() {
                   </div>
 
                   <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">
-                      Total Bobinas
-                    </p>
+                    <p className="text-xs text-zinc-400 uppercase font-bold">Total Bobinas</p>
                     <p className="text-3xl font-bold text-zinc-50">
                       {results.stats.totalCoils}
                     </p>
                   </div>
 
                   <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">
-                      Sucata Total
-                    </p>
+                    <p className="text-xs text-zinc-400 uppercase font-bold">Sucata Total</p>
                     <p className="text-3xl font-bold text-red-400">
-                      {results.stats.totalScrapWeight}
-                      <span className="text-sm text-zinc-500">kg</span>
+                      {results.stats.scrapPercent}%
+                    </p>
+                    <p className="text-xs text-red-300">
+                      {results.stats.totalScrapWeight} kg
                     </p>
                   </div>
 
@@ -1422,26 +1347,23 @@ export default function SlitterOptimizer() {
                     <p className="text-xs text-zinc-400 uppercase font-bold mb-1">
                       Status Pedidos
                     </p>
-                    {Object.entries(results.demandAnalysis).map(
-                      ([width, data]) => (
-                        <div
-                          key={width}
-                          className="flex justify-between text-xs border-b border-zinc-800 py-1"
+                    {Object.entries(results.demandAnalysis).map(([width, data]) => (
+                      <div
+                        key={width}
+                        className="flex justify-between text-xs border-b border-zinc-800 py-1"
+                      >
+                        <span className="text-zinc-300">{width}mm:</span>
+                        <span
+                          className={
+                            data.producedWeight >= data.reqWeight
+                              ? "text-emerald-300"
+                              : "text-red-300"
+                          }
                         >
-                          <span className="text-zinc-300">{width}mm:</span>
-                          <span
-                            className={
-                              data.producedWeight >= data.reqWeight
-                                ? "text-emerald-300"
-                                : "text-red-300"
-                            }
-                          >
-                            {Math.round(data.producedWeight)}/
-                            {data.reqWeight.toFixed(0)}kg
-                          </span>
-                        </div>
-                      )
-                    )}
+                          {Math.round(data.producedWeight)}/{data.reqWeight.toFixed(0)}kg
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1449,8 +1371,11 @@ export default function SlitterOptimizer() {
                 <div className="space-y-4">
                   {results.patterns.map((pattern, idx) => {
                     const visualMotherWidth = Number(motherWidth);
+                    const safeTrim = Number(trim);
+                    const visualUsableWidth = visualMotherWidth - safeTrim;
                     const patternEfficiency = (
-                      (pattern.usedWidth / visualMotherWidth) * 100
+                      (pattern.usedWidth / visualMotherWidth) *
+                      100
                     ).toFixed(1);
 
                     const uniqueCuts = [...new Set(pattern.cuts)];
@@ -1470,8 +1395,7 @@ export default function SlitterOptimizer() {
                                 Padrão {String.fromCharCode(65 + idx)}
                               </h4>
                               <div className="text-sm text-zinc-400">
-                                Executar em:{" "}
-                                <strong>{pattern.count} bobina(s)</strong>
+                                Executar em: <strong>{pattern.count} bobina(s)</strong>
                                 <br />
                                 <span className="text-xs bg-zinc-900 px-1 rounded border border-zinc-800">
                                   Pesos:{" "}
@@ -1503,10 +1427,8 @@ export default function SlitterOptimizer() {
                           {/* Visual */}
                           <div className="h-16 w-full bg-zinc-800 rounded-xl overflow-hidden flex border-2 border-zinc-700 relative">
                             {pattern.cuts.map((cut, i) => {
-                              const colorIndex =
-                                uniqueCuts.indexOf(cut) % COLORS.length;
-                              const widthPercent =
-                                (cut.width / visualMotherWidth) * 100;
+                              const colorIndex = uniqueCuts.indexOf(cut) % COLORS.length;
+                              const widthPercent = (cut.width / visualMotherWidth) * 100;
 
                               return (
                                 <div
@@ -1516,27 +1438,43 @@ export default function SlitterOptimizer() {
                                   title={`${cut.width}mm`}
                                 >
                                   {widthPercent > 8 && (
-                                    <span className="font-bold text-sm">
-                                      {cut.width}
-                                    </span>
+                                    <span className="font-bold text-sm">{cut.width}</span>
                                   )}
                                 </div>
                               );
                             })}
 
-                            {visualMotherWidth - pattern.usedWidth > 0 && (
+                            {/* SUCATA REAL (Apenas o que sobrou da largura ÚTIL) */}
+                            {visualUsableWidth - pattern.usedWidth > 0.1 && (
                               <div
-                                className="h-full bg-repeating-linear-stripes bg-red-950/30 flex items-center justify-center"
+                                className="h-full bg-repeating-linear-stripes bg-red-950/30 flex items-center justify-center border-l border-red-900/50"
                                 style={{
                                   width: `${
-                                    ((visualMotherWidth - pattern.usedWidth) /
+                                    ((visualUsableWidth - pattern.usedWidth) /
                                       visualMotherWidth) *
                                     100
                                   }%`,
                                 }}
                               >
-                                <span className="text-red-300 text-xs font-bold">
-                                  LIVRE
+                                <span className="text-red-300 text-[10px] font-bold rotate-90 md:rotate-0">
+                                  SOBRA
+                                </span>
+                              </div>
+                            )}
+
+                            {/* REFILO (Sempre presente se houver refilo configurado) */}
+                            {safeTrim > 0 && (
+                              <div
+                                className="h-full bg-zinc-950 flex items-center justify-center border-l border-zinc-700 relative"
+                                style={{
+                                  width: `${(safeTrim / visualMotherWidth) * 100}%`,
+                                  backgroundImage:
+                                    "repeating-linear-gradient(45deg, transparent, transparent 2px, #333 2px, #333 4px)",
+                                }}
+                                title={`Refilo: ${safeTrim}mm`}
+                              >
+                                <span className="text-zinc-500 text-[9px] font-bold rotate-90 md:rotate-0 whitespace-nowrap">
+                                  REFILO
                                 </span>
                               </div>
                             )}
@@ -1561,29 +1499,27 @@ export default function SlitterOptimizer() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {pattern.setupCoordinates.map(
-                                    (setup, sIdx) => (
-                                      <tr key={sIdx} className="border-t border-zinc-800">
-                                        <td className="p-2 border-r border-zinc-800 font-bold text-zinc-500">
-                                          {sIdx + 1}
-                                        </td>
-                                        <td className="p-2 border-r border-zinc-800 font-mono text-blue-300 font-bold">
-                                          {setup.start} mm
-                                        </td>
-                                        <td className="p-2 border-r border-zinc-800 font-bold text-base text-zinc-50">
-                                          {setup.width} mm
-                                        </td>
-                                        <td className="p-2 border-r border-zinc-800 font-mono text-zinc-300">
-                                          {setup.end} mm
-                                        </td>
-                                        <td className="p-2 text-zinc-300 truncate max-w-[160px]">
-                                          {setup.desc}
-                                        </td>
-                                      </tr>
-                                    )
-                                  )}
+                                  {pattern.setupCoordinates.map((setup, sIdx) => (
+                                    <tr key={sIdx} className="border-t border-zinc-800">
+                                      <td className="p-2 border-r border-zinc-800 font-bold text-zinc-500">
+                                        {sIdx + 1}
+                                      </td>
+                                      <td className="p-2 border-r border-zinc-800 font-mono text-blue-300 font-bold">
+                                        {setup.start} mm
+                                      </td>
+                                      <td className="p-2 border-r border-zinc-800 font-bold text-base text-zinc-50">
+                                        {setup.width} mm
+                                      </td>
+                                      <td className="p-2 border-r border-zinc-800 font-mono text-zinc-300">
+                                        {setup.end} mm
+                                      </td>
+                                      <td className="p-2 text-zinc-300 truncate max-w-[160px]">
+                                        {setup.desc}
+                                      </td>
+                                    </tr>
+                                  ))}
 
-                                  {visualMotherWidth - pattern.usedWidth > 0 && (
+                                  {visualUsableWidth - pattern.usedWidth > 0.1 && (
                                     <tr className="border-t border-red-900/50 bg-red-950/30">
                                       <td className="p-2 border-r border-zinc-800 text-red-300 font-bold">
                                         Ref
@@ -1592,13 +1528,33 @@ export default function SlitterOptimizer() {
                                         {pattern.usedWidth} mm
                                       </td>
                                       <td className="p-2 border-r border-zinc-800 font-bold text-red-200">
-                                        {(visualMotherWidth - pattern.usedWidth).toFixed(1)} mm
+                                        {(visualUsableWidth - pattern.usedWidth).toFixed(1)} mm
                                       </td>
                                       <td className="p-2 border-r border-zinc-800 font-mono text-zinc-400">
-                                        {visualMotherWidth} mm
+                                        {visualUsableWidth} mm
                                       </td>
                                       <td className="p-2 text-red-200 font-bold text-xs uppercase">
-                                        Sucata / Sobra
+                                        SUCATA / SOBRA
+                                      </td>
+                                    </tr>
+                                  )}
+
+                                  {safeTrim > 0 && (
+                                    <tr className="border-t border-zinc-800 bg-zinc-900/30">
+                                      <td className="p-2 border-r border-zinc-800 text-zinc-500 font-bold">
+                                        Trim
+                                      </td>
+                                      <td className="p-2 border-r border-zinc-800 font-mono text-zinc-600">
+                                        {visualUsableWidth} mm
+                                      </td>
+                                      <td className="p-2 border-r border-zinc-800 font-bold text-zinc-500">
+                                        {safeTrim} mm
+                                      </td>
+                                      <td className="p-2 border-r border-zinc-800 font-mono text-zinc-600">
+                                        {visualMotherWidth} mm
+                                      </td>
+                                      <td className="p-2 text-zinc-500 font-bold text-xs uppercase">
+                                        REFILO (Margem)
                                       </td>
                                     </tr>
                                   )}
@@ -1621,6 +1577,83 @@ export default function SlitterOptimizer() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mt-8 space-y-3">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-300" />
+                <h4 className="text-sm font-bold text-zinc-100">Salvar preset</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Guarda largura, refilo, bobinas e pedidos para reutilizar em outra sessão.
+              </p>
+              <button
+                onClick={savePreset}
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white border border-blue-500/50 transition"
+              >
+                Salvar no navegador
+              </button>
+            </div>
+
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-300" />
+                <h4 className="text-sm font-bold text-zinc-100">Recuperar preset</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Restaura a última configuração salva para continuar de onde parou.
+              </p>
+              <button
+                onClick={loadPreset}
+                disabled={!hasSavedPreset}
+                className="px-3 py-2 text-xs font-semibold rounded-lg border transition disabled:bg-zinc-800 disabled:text-zinc-500 disabled:border-zinc-800 bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500/50"
+              >
+                {hasSavedPreset ? "Carregar preset salvo" : "Nenhum preset salvo"}
+              </button>
+            </div>
+
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-orange-300" />
+                <h4 className="text-sm font-bold text-zinc-100">Plano demo</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Carrega um exemplo pronto de BQ 2,00mm com pedidos e bobinas para testar o
+                cálculo na hora.
+              </p>
+              <button
+                onClick={loadDemoPlan}
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-orange-600 hover:bg-orange-500 text-white border border-orange-500/50 transition"
+              >
+                Preencher com exemplo
+              </button>
+            </div>
+
+            <div className="bg-zinc-950/60 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-zinc-200" />
+                <h4 className="text-sm font-bold text-zinc-100">Limpar tudo</h4>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed flex-1">
+                Restaura os valores padrão e limpa demandas/resultados para começar um novo
+                corte.
+              </p>
+              <button
+                onClick={clearAll}
+                className="px-3 py-2 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 transition"
+              >
+                Resetar configurações
+              </button>
+            </div>
+          </div>
+
+          {presetStatus && (
+            <div className="text-xs text-zinc-300 bg-zinc-900/70 border border-zinc-800 rounded-xl p-3">
+              {presetStatus}
+            </div>
+          )}
         </div>
 
         <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
