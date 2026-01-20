@@ -1778,31 +1778,31 @@ export default function SmartSlit() {
 
         {/* HEADER */}
         <header className="sticky top-0 z-20 rounded-2xl bg-zinc-950/80 backdrop-blur border border-zinc-800 px-4 py-4 md:px-6 md:py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="w-44 h-24 flex items-center justify-center overflow-hidden">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-32 h-16 md:w-44 md:h-24 flex items-center justify-center overflow-hidden">
               <img src={logo2} alt="SmartSlit" className="w-full h-full object-contain" />
             </div>
             <div>
-              <div className="text-[12px] uppercase tracking-[0.28em] text-emerald-300 font-semibold">
+              <div className="text-[10px] md:text-[12px] uppercase tracking-[0.24em] md:tracking-[0.28em] text-emerald-300 font-semibold">
                 SmartSlit
               </div>
-              <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2">
+              <h1 className="text-xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2">
                 Planejamento de Corte
-                <span className="text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/40 text-emerald-200 bg-emerald-950/40">
+                <span className="text-[10px] md:text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/40 text-emerald-200 bg-emerald-950/40">
                   Industrial
                 </span>
               </h1>
-              <p className="text-zinc-400 mt-1 text-[13px] max-w-[520px]">
+              <p className="text-zinc-400 mt-1 text-xs md:text-[13px] max-w-[520px]">
                 Otimize bobinas, reduza sucata e gere ordens de producao prontas para o chao
                 de fabrica.
               </p>
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex w-full md:w-auto gap-2">
             <button
               onClick={() => setShowDb(!showDb)}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition w-full md:w-auto justify-center"
             >
               <Database className="w-4 h-4" />
               {showDb ? "Ocultar Padroes" : "Ver Padroes"}
