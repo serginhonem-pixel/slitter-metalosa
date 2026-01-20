@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import logo2 from "./logo2.png";
 import {
   Plus,
   Trash2,
@@ -1778,20 +1779,20 @@ export default function SmartSlit() {
         {/* HEADER */}
         <header className="sticky top-0 z-20 rounded-2xl bg-zinc-950/80 backdrop-blur border border-zinc-800 px-4 py-4 md:px-6 md:py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 text-zinc-900 font-extrabold flex items-center justify-center shadow-lg shadow-orange-500/20">
-              SS
+            <div className="w-44 h-24 flex items-center justify-center overflow-hidden">
+              <img src={logo2} alt="SmartSlit" className="w-full h-full object-contain" />
             </div>
             <div>
-              <div className="text-[11px] uppercase tracking-[0.32em] text-amber-300 font-semibold">
+              <div className="text-[12px] uppercase tracking-[0.28em] text-emerald-300 font-semibold">
                 SmartSlit
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+              <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2">
                 Planejamento de Corte
                 <span className="text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/40 text-emerald-200 bg-emerald-950/40">
                   Industrial
                 </span>
               </h1>
-              <p className="text-zinc-400 mt-1 text-sm max-w-[520px]">
+              <p className="text-zinc-400 mt-1 text-[13px] max-w-[520px]">
                 Otimize bobinas, reduza sucata e gere ordens de producao prontas para o chao
                 de fabrica.
               </p>
