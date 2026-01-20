@@ -8,13 +8,14 @@ import {
   TrendingUp,
   Printer,
   AlertCircle,
-  Scissors,
   Box,
   Scale,
   Layers,
   Ruler,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // --- DADOS PADRÃO (base completa) ---
 const DEFAULT_CSV_DATA = `
@@ -191,7 +192,10 @@ const COLORS = [
   "bg-orange-500",
 ];
 
-export default function SlitterOptimizer() {
+const PRESET_STORAGE_KEY = "slitter-preset-v1";
+
+export default function SmartSlit() {
+  const [cutMode, setCutMode] = useState("longitudinal");
   const [motherWidth, setMotherWidth] = useState(1200);
   const [stockCoils, setStockCoils] = useState([{ id: 1, weight: 10000 }]);
   const [trim, setTrim] = useState(20);
@@ -202,15 +206,28 @@ export default function SlitterOptimizer() {
   const [selectedProductCode, setSelectedProductCode] = useState("");
   const [newWeight, setNewWeight] = useState("");
 
+  const [sheetWidth] = useState(1850);
+  const [sheetHeight] = useState(2750);
+  const [sheetDemands, setSheetDemands] = useState([]);
+  const [sheetPieceWidth, setSheetPieceWidth] = useState("");
+  const [sheetPieceHeight, setSheetPieceHeight] = useState("");
+  const [sheetPieceQty, setSheetPieceQty] = useState(1);
+  const [hasSeededSheet, setHasSeededSheet] = useState(false);
+  const [sheetSuggestions, setSheetSuggestions] = useState([]);
+
   const [results, setResults] = useState(null);
+  const [sheetResults, setSheetResults] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [showDb, setShowDb] = useState(false);
   const [weightAlert, setWeightAlert] = useState(null);
+  const [sheetAlert, setSheetAlert] = useState("");
   const [presetStatus, setPresetStatus] = useState("");
   const [hasSavedPreset, setHasSavedPreset] = useState(false);
+  const [uploadedData, setUploadedData] = useState(null);
+  const [dbStatus, setDbStatus] = useState("");
 
-  const activeDb = useMemo(() => parseCSV(DEFAULT_CSV_DATA), []);
+  const activeDb = useMemo(() => uploadedData ?? parseCSV(DEFAULT_CSV_DATA), [uploadedData]);
 
   const availableProducts = useMemo(() => {
     const safeThickness = Number(coilThickness) || 0;
@@ -234,6 +251,38 @@ export default function SlitterOptimizer() {
 
     return Array.from(types).sort();
   }, [activeDb]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(PRESET_STORAGE_KEY);
+    setHasSavedPreset(Boolean(raw));
+  }, []);
+
+  useEffect(() => {
+    resetOutputs();
+  }, [cutMode]);
+
+  useEffect(() => {
+    if (cutMode !== "transversal") return;
+    if (sheetDemands.length > 0 || hasSeededSheet) return;
+
+    const heights = [600, 900, 1200, 750];
+    const baseProducts = availableProducts.slice(0, 4);
+    if (!baseProducts.length) return;
+
+    const seeded = baseProducts.map((p, idx) => ({
+      id: Date.now() + idx,
+      width: p.width,
+      height: heights[idx % heights.length],
+      qty: 2,
+      code: p.code,
+      isFiller: false,
+    }));
+
+    setSheetDemands(seeded);
+    setSheetResults(null);
+    setSheetAlert("");
+    setHasSeededSheet(true);
+  }, [cutMode, availableProducts, sheetDemands.length, hasSeededSheet]);
 
   useEffect(() => {
     if (selectedProductCode) {
@@ -275,6 +324,7 @@ export default function SlitterOptimizer() {
     () => stockCoils.reduce((acc, c) => acc + c.weight, 0),
     [stockCoils]
   );
+  const sheetArea = useMemo(() => sheetWidth * sheetHeight, [sheetWidth, sheetHeight]);
 
   const addDemand = () => {
     const product = activeDb.find((p) => p.code === selectedProductCode);
@@ -308,8 +358,12 @@ export default function SlitterOptimizer() {
 
   const resetOutputs = () => {
     setResults(null);
+    setSheetResults(null);
     setSuggestions([]);
+    setSheetSuggestions([]);
     setWeightAlert(null);
+    setSheetAlert("");
+    setIsCalculating(false);
   };
 
   const addComboDemand = (items) => {
@@ -332,6 +386,62 @@ export default function SlitterOptimizer() {
     setResults(null);
     setSuggestions([]);
     setWeightAlert(null);
+  };
+
+  const addSheetDemand = () => {
+    const widthVal = parseFloat(sheetPieceWidth);
+    const heightVal = parseFloat(sheetPieceHeight);
+    const qtyVal = parseInt(sheetPieceQty, 10);
+
+    if (!widthVal || !heightVal || !qtyVal) return;
+
+    const newItem = {
+      id: Date.now(),
+      width: widthVal,
+      height: heightVal,
+      qty: qtyVal,
+      isFiller: false,
+    };
+
+    setSheetDemands((prev) => [...prev, newItem]);
+    setSheetPieceWidth("");
+    setSheetPieceHeight("");
+    setSheetPieceQty(1);
+    setSheetResults(null);
+    setSheetAlert("");
+  };
+
+  const removeSheetDemand = (id) => {
+    setSheetDemands(sheetDemands.filter((d) => d.id !== id));
+    setSheetResults(null);
+    setSheetAlert("");
+  };
+
+  const addSheetSuggestion = (suggestion) => {
+    const items = Array.isArray(suggestion.items)
+      ? suggestion.items
+      : [
+          {
+            width: suggestion.width,
+            height: suggestion.height,
+            qty: suggestion.qty,
+            code: suggestion.code,
+          },
+        ];
+
+    setSheetDemands((prev) => [
+      ...prev,
+      ...items.map((item) => ({
+        id: Date.now() + Math.random(),
+        width: item.width,
+        height: item.height,
+        qty: item.qty,
+        code: item.code,
+        isFiller: true,
+      })),
+    ]);
+    setSheetResults(null);
+    setSheetAlert("");
   };
 
   const savePreset = () => {
@@ -409,6 +519,129 @@ export default function SlitterOptimizer() {
     setPresetStatus("Plano demo carregado. Ajuste e clique em Gerar Plano.");
   };
 
+  const normalizeHeader = (value) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[̀-ͯ]/g, "");
+
+  const normalizeNumber = (value) => {
+    if (value == null || value === "") return NaN;
+    if (typeof value === "number") return value;
+    const raw = String(value).trim();
+    if (!raw) return NaN;
+    const normalized = raw.includes(",")
+      ? raw.replace(/\./g, "").replace(",", ".")
+      : raw;
+    return Number.parseFloat(normalized);
+  };
+
+  const handleExcelUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setDbStatus("");
+
+    if (!/\.xlsx?$|\.xls$/i.test(file.name)) {
+      setDbStatus("Formato invalido. Envie um arquivo .xlsx ou .xls.");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = new Uint8Array(reader.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        const mapRow = (row) => {
+          const keys = Object.keys(row);
+          const findValue = (labels) => {
+            const matchKey = keys.find((k) => labels.includes(normalizeHeader(k)));
+            return matchKey ? row[matchKey] : "";
+          };
+
+          const code = String(findValue(["codigo", "cod", "code"])).trim();
+          const desc = String(
+            findValue(["descricao", "descricao produto", "descri??o", "descricao do produto"])
+          ).trim();
+          const type = String(findValue(["tipo", "classe"])).trim();
+          const thickness = normalizeNumber(findValue(["espessura", "thickness"]));
+          const width = normalizeNumber(findValue(["largura", "width"]));
+          const history = normalizeNumber(
+            findValue([
+              "historico faturamento",
+              "historico",
+              "historico de faturamento",
+              "hist_faturamento",
+            ])
+          );
+
+          return {
+            code,
+            desc,
+            type,
+            thickness,
+            width,
+            history: Number.isNaN(history) ? 0 : history,
+          };
+        };
+
+        const parsed = rows
+          .map(mapRow)
+          .filter(
+            (row) =>
+              row.code &&
+              row.desc &&
+              !Number.isNaN(row.width) &&
+              !Number.isNaN(row.thickness)
+          );
+
+        if (!parsed.length) {
+          setDbStatus("Nenhuma linha valida encontrada. Verifique as colunas.");
+          return;
+        }
+
+        setUploadedData(parsed);
+        setShowDb(true);
+        setDbStatus(`Arquivo importado: ${parsed.length} produtos carregados.`);
+      } catch (err) {
+        console.error(err);
+        setDbStatus("Nao foi possivel ler o Excel. Verifique o arquivo.");
+      } finally {
+        event.target.value = "";
+      }
+    };
+
+    reader.onerror = () => {
+      setDbStatus("Nao foi possivel ler o arquivo.");
+      event.target.value = "";
+    };
+
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = [
+      "Codigo",
+      "Descricao",
+      "Tipo",
+      "Espessura",
+      "Largura",
+      "Historico Faturamento",
+    ];
+    const example = [["00650A", "PERFIL US 45X17X1,80", "BQ", 1.8, 65, 3236.75]];
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...example]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Produtos");
+    XLSX.writeFile(workbook, "modelo-smartslit.xlsx");
+  };
+
   const clearAll = () => {
     setMotherWidth(1200);
     setStockCoils([{ id: 1, weight: 10000 }]);
@@ -416,6 +649,8 @@ export default function SlitterOptimizer() {
     setCoilThickness(2.0);
     setCoilType("BQ");
     setDemands([]);
+    setSheetDemands([]);
+    setHasSeededSheet(false);
     resetOutputs();
     setPresetStatus("Configurações resetadas.");
   };
@@ -547,6 +782,623 @@ export default function SlitterOptimizer() {
     });
 
     return potentialSuggestions;
+  };
+
+  const calculateSheetOptimization = () => {
+    if (!sheetDemands.length) return;
+
+    setIsCalculating(true);
+    setSheetResults(null);
+    setSheetAlert("");
+    setSheetSuggestions([]);
+
+    setTimeout(() => {
+      try {
+        const safeSheetWidth = Number(sheetWidth);
+        const safeSheetHeight = Number(sheetHeight);
+        const sheetAreaLocal = safeSheetWidth * safeSheetHeight;
+
+        const primaryPieces = [];
+        const fillerPieces = [];
+        sheetDemands.forEach((item) => {
+          const qty = Math.max(1, Number(item.qty) || 1);
+          const isFiller = Boolean(item.isFiller);
+          for (let i = 0; i < qty; i++) {
+            const piece = {
+              width: item.width,
+              height: item.height,
+              label: `${item.width}x${item.height}mm`,
+              isFiller,
+            };
+            if (isFiller) {
+              fillerPieces.push(piece);
+            } else {
+              primaryPieces.push(piece);
+            }
+          }
+        });
+
+        primaryPieces.sort((a, b) => b.width * b.height - a.width * a.height);
+        fillerPieces.sort((a, b) => b.width * b.height - a.width * a.height);
+
+        const sheets = [];
+        const oversize = [];
+        const unplacedFillers = [];
+
+        const createSheet = () => ({
+          id: sheets.length + 1,
+          placements: [],
+          usedArea: 0,
+          freeRects: [
+            { x: 0, y: 0, width: safeSheetWidth, height: safeSheetHeight },
+          ],
+        });
+
+        const cleanupFreeRects = (freeRects) => {
+          const filtered = freeRects.filter((r) => r.width > 0 && r.height > 0);
+          return filtered.filter((rect, idx) => {
+            for (let i = 0; i < filtered.length; i++) {
+              if (i === idx) continue;
+              const other = filtered[i];
+              const contained =
+                rect.x >= other.x &&
+                rect.y >= other.y &&
+                rect.x + rect.width <= other.x + other.width &&
+                rect.y + rect.height <= other.y + other.height;
+              if (contained) return false;
+            }
+            return true;
+          });
+        };
+
+        const mergeFreeRects = (freeRects) => {
+          let merged = freeRects.slice();
+          let didMerge = true;
+
+          while (didMerge) {
+            didMerge = false;
+            outer: for (let i = 0; i < merged.length; i++) {
+              for (let j = i + 1; j < merged.length; j++) {
+                const a = merged[i];
+                const b = merged[j];
+                const sameRow = a.y === b.y && a.height === b.height;
+                const sameCol = a.x === b.x && a.width === b.width;
+
+                if (sameRow && a.x + a.width === b.x) {
+                  merged[i] = {
+                    x: a.x,
+                    y: a.y,
+                    width: a.width + b.width,
+                    height: a.height,
+                  };
+                  merged.splice(j, 1);
+                  didMerge = true;
+                  break outer;
+                }
+
+                if (sameRow && b.x + b.width === a.x) {
+                  merged[i] = {
+                    x: b.x,
+                    y: a.y,
+                    width: a.width + b.width,
+                    height: a.height,
+                  };
+                  merged.splice(j, 1);
+                  didMerge = true;
+                  break outer;
+                }
+
+                if (sameCol && a.y + a.height === b.y) {
+                  merged[i] = {
+                    x: a.x,
+                    y: a.y,
+                    width: a.width,
+                    height: a.height + b.height,
+                  };
+                  merged.splice(j, 1);
+                  didMerge = true;
+                  break outer;
+                }
+
+                if (sameCol && b.y + b.height === a.y) {
+                  merged[i] = {
+                    x: a.x,
+                    y: b.y,
+                    width: a.width,
+                    height: a.height + b.height,
+                  };
+                  merged.splice(j, 1);
+                  didMerge = true;
+                  break outer;
+                }
+              }
+            }
+          }
+
+          return merged;
+        };
+
+        const findBestPlacement = (piece, targetSheets) => {
+          let best = null;
+          const orientations = [{ w: piece.width, h: piece.height, rotated: false }];
+          if (piece.width !== piece.height) {
+            orientations.push({ w: piece.height, h: piece.width, rotated: true });
+          }
+
+          targetSheets.forEach((sheet, sheetIdx) => {
+            sheet.freeRects.forEach((rect, rectIdx) => {
+              orientations.forEach((opt) => {
+                if (opt.w > rect.width || opt.h > rect.height) return;
+                const areaWaste = rect.width * rect.height - opt.w * opt.h;
+                const shortSide = Math.min(rect.width - opt.w, rect.height - opt.h);
+                const score = areaWaste * 1000 + shortSide;
+                if (!best || score < best.score) {
+                  best = {
+                    sheetIdx,
+                    rectIdx,
+                    x: rect.x,
+                    y: rect.y,
+                    width: opt.w,
+                    height: opt.h,
+                    rotated: opt.rotated,
+                    score,
+                  };
+                }
+              });
+            });
+          });
+
+          return best;
+        };
+
+        const placePiece = (sheet, placement, piece) => {
+          const rect = sheet.freeRects[placement.rectIdx];
+          sheet.freeRects.splice(placement.rectIdx, 1);
+          const remainingRight = rect.width - placement.width;
+          const remainingBottom = rect.height - placement.height;
+
+          const splitOptionA = [];
+          if (remainingRight > 0) {
+            splitOptionA.push({
+              x: rect.x + placement.width,
+              y: rect.y,
+              width: remainingRight,
+              height: rect.height,
+            });
+          }
+          if (remainingBottom > 0) {
+            splitOptionA.push({
+              x: rect.x,
+              y: rect.y + placement.height,
+              width: placement.width,
+              height: remainingBottom,
+            });
+          }
+
+          const splitOptionB = [];
+          if (remainingRight > 0) {
+            splitOptionB.push({
+              x: rect.x + placement.width,
+              y: rect.y,
+              width: remainingRight,
+              height: placement.height,
+            });
+          }
+          if (remainingBottom > 0) {
+            splitOptionB.push({
+              x: rect.x,
+              y: rect.y + placement.height,
+              width: rect.width,
+              height: remainingBottom,
+            });
+          }
+
+          const scoreSplit = (splits) =>
+            splits.reduce((acc, r) => acc + Math.min(r.width, r.height), 0);
+          const chosenSplits =
+            scoreSplit(splitOptionA) >= scoreSplit(splitOptionB)
+              ? splitOptionA
+              : splitOptionB;
+
+          sheet.freeRects.push(...chosenSplits);
+          sheet.freeRects = mergeFreeRects(cleanupFreeRects(sheet.freeRects));
+
+          sheet.placements.push({
+            x: placement.x,
+            y: placement.y,
+            width: placement.width,
+            height: placement.height,
+            rotated: placement.rotated,
+            label: piece.label,
+          });
+          sheet.usedArea += placement.width * placement.height;
+        };
+
+        const placePieces = (pieceList, allowNewSheets) => {
+          pieceList.forEach((piece) => {
+            const fits =
+              (piece.width <= safeSheetWidth && piece.height <= safeSheetHeight) ||
+              (piece.height <= safeSheetWidth && piece.width <= safeSheetHeight);
+            if (!fits) {
+              oversize.push(piece);
+              return;
+            }
+
+            if (!sheets.length) {
+              if (allowNewSheets) {
+                sheets.push(createSheet());
+              } else {
+                unplacedFillers.push(piece);
+                return;
+              }
+            }
+
+            let placement = findBestPlacement(piece, sheets);
+            if (!placement && allowNewSheets) {
+              sheets.push(createSheet());
+              placement = findBestPlacement(piece, sheets);
+            }
+
+            if (!placement) {
+              if (allowNewSheets) {
+                oversize.push(piece);
+              } else {
+                unplacedFillers.push(piece);
+              }
+              return;
+            }
+
+            placePiece(sheets[placement.sheetIdx], placement, piece);
+          });
+        };
+
+        placePieces(primaryPieces, true);
+        placePieces(fillerPieces, false);
+
+        const totalUsedArea = sheets.reduce((acc, sheet) => acc + sheet.usedArea, 0);
+        const totalSheetArea = sheets.length * sheetAreaLocal;
+        const efficiency = totalSheetArea ? (totalUsedArea / totalSheetArea) * 100 : 0;
+        const placedPieces = sheets.reduce((acc, sheet) => acc + sheet.placements.length, 0);
+
+        setSheetResults({
+          sheets,
+          oversize,
+          stats: {
+            totalPieces: placedPieces,
+            totalSheets: sheets.length,
+            efficiency: Number(efficiency.toFixed(1)),
+            waste: Number((100 - efficiency).toFixed(1)),
+          },
+        });
+
+        const heightOptionsRaw = sheetDemands
+          .map((item) => Number(item.height))
+          .filter((value) => Number.isFinite(value) && value > 0);
+        const heightOptions =
+          heightOptionsRaw.length > 0 ? heightOptionsRaw : [600, 900, 1200, 750];
+        const widthOptions = Array.from(
+          new Map(
+            availableProducts
+              .map((p) => ({
+                width: Number(p.width),
+                code: String(p.code ?? "").trim(),
+              }))
+              .filter((p) => Number.isFinite(p.width) && p.width > 0)
+              .map((p) => [p.width, p.code || `SKU-${p.width}`])
+          ).entries()
+        )
+          .map(([width, code]) => ({ width, code }))
+          .filter((item) => item.width <= safeSheetWidth);
+
+        const suggestions = [];
+        const MIN_FILL_RATIO = 0.7;
+
+        sheets.forEach((sheet, idx) => {
+          const freeArea = sheet.freeRects.reduce(
+            (acc, rect) => acc + rect.width * rect.height,
+            0
+          );
+          if (freeArea <= 0) return;
+
+          const simulatePlacement = (freeRects, items) => {
+            const rects = freeRects.map((r) => ({ ...r }));
+            const placedCounts = items.map(() => 0);
+            let filledArea = 0;
+
+            const cleanupRects = (list) => {
+              const filtered = list.filter((r) => r.width > 0 && r.height > 0);
+              return filtered.filter((rect, idx) => {
+                for (let i = 0; i < filtered.length; i++) {
+                  if (i === idx) continue;
+                  const other = filtered[i];
+                  const contained =
+                    rect.x >= other.x &&
+                    rect.y >= other.y &&
+                    rect.x + rect.width <= other.x + other.width &&
+                    rect.y + rect.height <= other.y + other.height;
+                  if (contained) return false;
+                }
+                return true;
+              });
+            };
+
+            const mergeRects = (list) => {
+              let merged = list.slice();
+              let didMerge = true;
+              while (didMerge) {
+                didMerge = false;
+                outer: for (let i = 0; i < merged.length; i++) {
+                  for (let j = i + 1; j < merged.length; j++) {
+                    const a = merged[i];
+                    const b = merged[j];
+                    const sameRow = a.y === b.y && a.height === b.height;
+                    const sameCol = a.x === b.x && a.width === b.width;
+
+                    if (sameRow && a.x + a.width === b.x) {
+                      merged[i] = { x: a.x, y: a.y, width: a.width + b.width, height: a.height };
+                      merged.splice(j, 1);
+                      didMerge = true;
+                      break outer;
+                    }
+                    if (sameRow && b.x + b.width === a.x) {
+                      merged[i] = { x: b.x, y: a.y, width: a.width + b.width, height: a.height };
+                      merged.splice(j, 1);
+                      didMerge = true;
+                      break outer;
+                    }
+                    if (sameCol && a.y + a.height === b.y) {
+                      merged[i] = { x: a.x, y: a.y, width: a.width, height: a.height + b.height };
+                      merged.splice(j, 1);
+                      didMerge = true;
+                      break outer;
+                    }
+                    if (sameCol && b.y + b.height === a.y) {
+                      merged[i] = { x: a.x, y: b.y, width: a.width, height: a.height + b.height };
+                      merged.splice(j, 1);
+                      didMerge = true;
+                      break outer;
+                    }
+                  }
+                }
+              }
+              return merged;
+            };
+
+            const findBestPlacementInRects = (piece) => {
+              let best = null;
+              const orientations = [{ w: piece.width, h: piece.height, rotated: false }];
+              if (piece.width !== piece.height) {
+                orientations.push({ w: piece.height, h: piece.width, rotated: true });
+              }
+
+              rects.forEach((rect, rectIdx) => {
+                orientations.forEach((opt) => {
+                  if (opt.w > rect.width || opt.h > rect.height) return;
+                  const areaWaste = rect.width * rect.height - opt.w * opt.h;
+                  const shortSide = Math.min(rect.width - opt.w, rect.height - opt.h);
+                  const score = areaWaste * 1000 + shortSide;
+                  if (!best || score < best.score) {
+                    best = {
+                      rectIdx,
+                      x: rect.x,
+                      y: rect.y,
+                      width: opt.w,
+                      height: opt.h,
+                      score,
+                    };
+                  }
+                });
+              });
+
+              return best;
+            };
+
+            const placeInRects = (placement) => {
+              const rect = rects[placement.rectIdx];
+              rects.splice(placement.rectIdx, 1);
+              const remainingRight = rect.width - placement.width;
+              const remainingBottom = rect.height - placement.height;
+
+              const splitOptionA = [];
+              if (remainingRight > 0) {
+                splitOptionA.push({
+                  x: rect.x + placement.width,
+                  y: rect.y,
+                  width: remainingRight,
+                  height: rect.height,
+                });
+              }
+              if (remainingBottom > 0) {
+                splitOptionA.push({
+                  x: rect.x,
+                  y: rect.y + placement.height,
+                  width: placement.width,
+                  height: remainingBottom,
+                });
+              }
+
+              const splitOptionB = [];
+              if (remainingRight > 0) {
+                splitOptionB.push({
+                  x: rect.x + placement.width,
+                  y: rect.y,
+                  width: remainingRight,
+                  height: placement.height,
+                });
+              }
+              if (remainingBottom > 0) {
+                splitOptionB.push({
+                  x: rect.x,
+                  y: rect.y + placement.height,
+                  width: rect.width,
+                  height: remainingBottom,
+                });
+              }
+
+              const scoreSplit = (splits) =>
+                splits.reduce((acc, r) => acc + Math.min(r.width, r.height), 0);
+              const chosenSplits =
+                scoreSplit(splitOptionA) >= scoreSplit(splitOptionB)
+                  ? splitOptionA
+                  : splitOptionB;
+
+              rects.push(...chosenSplits);
+              const cleaned = cleanupRects(rects);
+              rects.length = 0;
+              rects.push(...mergeRects(cleaned));
+            };
+
+            items.forEach((item, itemIdx) => {
+              const qty = Math.max(0, Number(item.qty) || 0);
+              for (let i = 0; i < qty; i++) {
+                const placement = findBestPlacementInRects(item);
+                if (!placement) break;
+                placeInRects(placement);
+                placedCounts[itemIdx] += 1;
+                filledArea += placement.width * placement.height;
+              }
+            });
+
+            return { filledArea, placedCounts };
+          };
+
+          const sheetLabel = String.fromCharCode(65 + idx);
+          const candidates = [];
+
+          widthOptions.forEach((wOpt) => {
+            heightOptions.forEach((h) => {
+              if (h > safeSheetHeight) return;
+              const area = wOpt.width * h;
+              if (!area) return;
+
+              const qty = sheet.freeRects.reduce((acc, rect) => {
+                const fitX = Math.floor(rect.width / wOpt.width);
+                const fitY = Math.floor(rect.height / h);
+                return acc + fitX * fitY;
+              }, 0);
+
+              if (!qty) return;
+
+              const filledArea = area * qty;
+              const fillRatio = filledArea / freeArea;
+              const score = (1 - fillRatio) * 1000 + (freeArea - filledArea);
+
+              candidates.push({
+                width: wOpt.width,
+                height: h,
+                code: wOpt.code,
+                qty,
+                area,
+                fillRatio,
+                score,
+                sheetLabel,
+              });
+            });
+          });
+
+          const singles = candidates
+            .slice()
+            .sort((a, b) => b.fillRatio - a.fillRatio || a.score - b.score)
+            .slice(0, 3)
+            .map((item) => {
+              const items = [
+                {
+                  width: item.width,
+                  height: item.height,
+                  code: item.code,
+                  qty: Math.min(item.qty, 8),
+                },
+              ];
+              const sim = simulatePlacement(sheet.freeRects, items);
+              if (!sim.filledArea) return null;
+              return {
+                items: [
+                  {
+                    ...items[0],
+                    qty: sim.placedCounts[0],
+                  },
+                ],
+                fillRatio: sim.filledArea / freeArea,
+                sheetLabel,
+              };
+            })
+            .filter(Boolean);
+
+          const combos = [];
+          const topCandidates = candidates
+            .slice()
+            .sort((a, b) => b.fillRatio - a.fillRatio || a.score - b.score)
+            .slice(0, 8);
+          for (let i = 0; i < topCandidates.length; i++) {
+            for (let j = i + 1; j < topCandidates.length; j++) {
+              const a = topCandidates[i];
+              const b = topCandidates[j];
+              const maxA = Math.min(a.qty, 6);
+              const maxB = Math.min(b.qty, 6);
+              let bestCombo = null;
+
+              for (let qa = 1; qa <= maxA; qa++) {
+                for (let qb = 1; qb <= maxB; qb++) {
+                  const items = [
+                    { width: a.width, height: a.height, code: a.code, qty: qa },
+                    { width: b.width, height: b.height, code: b.code, qty: qb },
+                  ];
+                  const sim = simulatePlacement(sheet.freeRects, items);
+                  if (!sim.filledArea) continue;
+                  const fillRatio = sim.filledArea / freeArea;
+                  const score = (1 - fillRatio) * 1000 + (freeArea - sim.filledArea);
+                  if (!bestCombo || score < bestCombo.score) {
+                    bestCombo = {
+                      items: [
+                        { ...items[0], qty: sim.placedCounts[0] },
+                        { ...items[1], qty: sim.placedCounts[1] },
+                      ],
+                      fillRatio,
+                      score,
+                      sheetLabel,
+                    };
+                  }
+                }
+              }
+
+              if (bestCombo) combos.push(bestCombo);
+            }
+          }
+
+          combos
+            .sort((a, b) => b.fillRatio - a.fillRatio || a.score - b.score)
+            .filter((combo) => combo.fillRatio >= MIN_FILL_RATIO)
+            .slice(0, 4)
+            .forEach((combo) => suggestions.push(combo));
+
+          singles
+            .filter((single) => single.fillRatio >= MIN_FILL_RATIO)
+            .forEach((single) => suggestions.push(single));
+        });
+
+        setSheetSuggestions(suggestions);
+
+        const alertParts = [];
+        if (oversize.length) {
+          alertParts.push(
+            `${oversize.length} pe?a(s) n?o cabem na chapa ${safeSheetWidth}x${safeSheetHeight}mm.`
+          );
+        }
+        if (unplacedFillers.length) {
+          alertParts.push(
+            `${unplacedFillers.length} pe?a(s) de sugest?o n?o couberam nas sobras atuais.`
+          );
+        }
+        if (alertParts.length) {
+          setSheetAlert(alertParts.join(" "));
+        }
+      } catch (err) {
+        console.error(err);
+        setSheetAlert("N?o foi poss?vel calcular o corte transversal.");
+      } finally {
+        setIsCalculating(false);
+      }
+    }, 300);
   };
 
   const calculateOptimization = () => {
@@ -894,11 +1746,11 @@ export default function SlitterOptimizer() {
     reportWindow.document.write(`
       <html>
         <head>
-          <title>OP Slitter Metalosa</title>
+          <title>SmartSlit | Ordem de Producao</title>
           ${styles}
         </head>
         <body>
-          <h1>Slitter Metalosa - Ordem de Produção</h1>
+          <h1>SmartSlit - Ordem de Producao</h1>
           ${header}
           ${cards}
           ${summary}
@@ -910,19 +1762,40 @@ export default function SlitterOptimizer() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-3 md:p-5 font-sans">
-      <div className="max-w-7xl mx-auto space-y-5">
+    <div
+      className="min-h-screen text-zinc-100 p-3 md:p-5 font-sans relative overflow-hidden"
+      style={{
+        fontFamily: "'Space Grotesk', 'Manrope', 'Segoe UI', sans-serif",
+        backgroundImage:
+          "radial-gradient(circle at top left, rgba(251, 191, 36, 0.16), transparent 55%), radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.12), transparent 45%), radial-gradient(circle at 80% 10%, rgba(59, 130, 246, 0.12), transparent 50%), linear-gradient(180deg, #0a0a0a 0%, #0c0c0c 35%, #090909 100%)",
+      }}
+    >
+      <div className="pointer-events-none absolute -top-32 right-0 w-[420px] h-[420px] bg-amber-500/20 blur-[120px] rounded-full" />
+      <div className="pointer-events-none absolute -bottom-40 left-0 w-[520px] h-[520px] bg-emerald-500/10 blur-[140px] rounded-full" />
+
+      <div className="max-w-7xl mx-auto space-y-5 relative">
 
         {/* HEADER */}
         <header className="sticky top-0 z-20 rounded-2xl bg-zinc-950/80 backdrop-blur border border-zinc-800 px-4 py-4 md:px-6 md:py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-3">
-              <Scissors className="w-7 h-7 text-blue-500" />
-              Slitter Metalosa
-            </h1>
-            <p className="text-zinc-400 mt-1 text-sm">
-              Otimizador de cortes com sugestão de combo
-            </p>
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 text-zinc-900 font-extrabold flex items-center justify-center shadow-lg shadow-orange-500/20">
+              SS
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.32em] text-amber-300 font-semibold">
+                SmartSlit
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight flex items-center gap-2">
+                Planejamento de Corte
+                <span className="text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/40 text-emerald-200 bg-emerald-950/40">
+                  Industrial
+                </span>
+              </h1>
+              <p className="text-zinc-400 mt-1 text-sm max-w-[520px]">
+                Otimize bobinas, reduza sucata e gere ordens de producao prontas para o chao
+                de fabrica.
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -931,10 +1804,10 @@ export default function SlitterOptimizer() {
               className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition"
             >
               <Database className="w-4 h-4" />
-              {showDb ? "Ocultar Padrões" : "Ver Padrões"}
+              {showDb ? "Ocultar Padroes" : "Ver Padroes"}
             </button>
 
-            {results && (
+            {cutMode === "longitudinal" && results && (
               <button
                 onClick={generateReport}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition shadow-sm"
@@ -947,7 +1820,7 @@ export default function SlitterOptimizer() {
         </header>
 
         {/* ALERTA DE PESO */}
-        {weightAlert && (
+        {cutMode === "longitudinal" && weightAlert && (
           <div className="bg-yellow-950/30 border border-yellow-700/50 p-4 rounded-xl shadow-sm animate-fade-in flex items-start gap-3">
             <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-1" />
             <div>
@@ -962,39 +1835,161 @@ export default function SlitterOptimizer() {
 
         {/* DB */}
         {showDb && (
-          <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 animate-fade-in">
-            <h3 className="font-bold text-zinc-200 mb-3 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-              Tabela de Produtos ({activeDb.length})
-            </h3>
-            <div className="overflow-x-auto max-h-60 overflow-y-auto border border-zinc-800 rounded-xl">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-zinc-950 text-zinc-400 sticky top-0">
-                  <tr>
-                    <th className="p-2">Código</th>
-                    <th className="p-2">Descrição</th>
-                    <th className="p-2">Tipo</th>
-                    <th className="p-2">Espessura</th>
-                    <th className="p-2">Largura</th>
-                    <th className="p-2 text-right">Histórico</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeDb.map((row, i) => (
-                    <tr key={i} className="border-t border-zinc-800 hover:bg-zinc-950/60">
-                      <td className="p-2 font-mono text-xs">{row.code}</td>
-                      <td className="p-2">{row.desc}</td>
-                      <td className="p-2 font-bold text-blue-400">{row.type}</td>
-                      <td className="p-2 font-bold">{row.thickness.toFixed(2)}</td>
-                      <td className="p-2">{row.width}</td>
-                      <td className="p-2 text-right font-mono text-emerald-300">{row.history}</td>
+          cutMode === "longitudinal" ? (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 animate-fade-in">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
+                <h3 className="font-bold text-zinc-200 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  Tabela de Produtos ({activeDb.length})
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold hover:bg-zinc-800 transition">
+                    <Upload className="w-4 h-4 text-amber-300" />
+                    Subir Excel
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={handleExcelUpload}
+                    />
+                  </label>
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold hover:bg-zinc-800 transition"
+                  >
+                    Baixar modelo
+                  </button>
+                  {uploadedData && (
+                    <button
+                      onClick={() => {
+                        setUploadedData(null);
+                        setDbStatus("Base padrao restaurada.");
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold hover:bg-zinc-800 transition"
+                    >
+                      Usar base padrao
+                    </button>
+                  )}
+                </div>
+              </div>
+              {dbStatus && (
+                <div className="mb-3 text-xs text-amber-200 bg-amber-950/20 border border-amber-900/40 rounded-lg px-3 py-2">
+                  {dbStatus}
+                </div>
+              )}
+              <div className="overflow-x-auto max-h-60 overflow-y-auto border border-zinc-800 rounded-xl">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-zinc-950 text-zinc-400 sticky top-0">
+                    <tr>
+                      <th className="p-2">Codigo</th>
+                      <th className="p-2">Descricao</th>
+                      <th className="p-2">Tipo</th>
+                      <th className="p-2">Espessura</th>
+                      <th className="p-2">Largura</th>
+                      <th className="p-2 text-right">Historico</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {activeDb.map((row, i) => (
+                      <tr key={i} className="border-t border-zinc-800 hover:bg-zinc-950/60">
+                        <td className="p-2 font-mono text-xs">{row.code}</td>
+                        <td className="p-2">{row.desc}</td>
+                        <td className="p-2 font-bold text-blue-400">{row.type}</td>
+                        <td className="p-2 font-bold">{row.thickness.toFixed(2)}</td>
+                        <td className="p-2">{row.width}</td>
+                        <td className="p-2 text-right font-mono text-emerald-300">{row.history}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-4 animate-fade-in">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-3">
+                <h3 className="font-bold text-zinc-200 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-400" />
+                  Padroes Transversais
+                </h3>
+                <div className="text-xs text-zinc-500">
+                  Chapa: {sheetWidth} x {sheetHeight} mm
+                </div>
+              </div>
+
+              {sheetResults ? (
+                <div className="overflow-x-auto max-h-60 overflow-y-auto border border-zinc-800 rounded-xl">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-zinc-950 text-zinc-400 sticky top-0">
+                      <tr>
+                        <th className="p-2">Chapa</th>
+                        <th className="p-2">Pecas</th>
+                        <th className="p-2">Uso</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sheetResults.sheets.map((sheet, idx) => (
+                        <tr key={sheet.id} className="border-t border-zinc-800 hover:bg-zinc-950/60">
+                          <td className="p-2 font-semibold text-zinc-100">
+                            {String.fromCharCode(65 + idx)}
+                          </td>
+                          <td className="p-2 text-zinc-300">{sheet.placements.length}</td>
+                          <td className="p-2 text-emerald-300">
+                            {sheetArea ? Math.round((sheet.usedArea / sheetArea) * 100) : 0}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-zinc-950/40 border border-dashed border-zinc-800 rounded-xl p-5">
+                  <p className="text-sm text-zinc-400 text-center mb-4">
+                    Calcule o corte transversal para ver os padroes.
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-zinc-300">
+                    {[
+                      { sku: "MDF-900x650", w: 900, h: 650 },
+                      { sku: "MDF-1200x900", w: 1200, h: 900 },
+                      { sku: "MDF-600x900", w: 600, h: 900 },
+                      { sku: "MDF-900x1200", w: 900, h: 1200 },
+                    ].map((mock, idx) => (
+                      <div
+                        key={`mock-${idx}`}
+                        className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-2 flex items-center justify-between"
+                      >
+                        <span className="font-semibold text-zinc-200">{mock.sku}</span>
+                        <span className="text-zinc-400">{mock.w}x{mock.h} mm</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
         )}
+
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-2 flex flex-wrap gap-2">
+          <button
+            onClick={() => setCutMode("longitudinal")}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition border ${
+              cutMode === "longitudinal"
+                ? "bg-emerald-600 text-white border-emerald-500/60"
+                : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900"
+            }`}
+          >
+            Corte Longitudinal
+          </button>
+          <button
+            onClick={() => setCutMode("transversal")}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold transition border ${
+              cutMode === "transversal"
+                ? "bg-amber-500 text-zinc-900 border-amber-400/80"
+                : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900"
+            }`}
+          >
+            Corte Transversal
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
@@ -1011,237 +2006,398 @@ export default function SlitterOptimizer() {
               </div>
 
               <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
-                      Largura (mm)
-                    </label>
-                    <input
-                      type="number"
-                      value={motherWidth}
-                      onChange={(e) =>
-                        setMotherWidth(
-                          e.target.value === "" ? "" : parseFloat(e.target.value)
-                        )
-                      }
-                      className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg"
-                    />
-                  </div>
+                {cutMode === "longitudinal" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
+                          Largura (mm)
+                        </label>
+                        <input
+                          type="number"
+                          value={motherWidth}
+                          onChange={(e) =>
+                            setMotherWidth(e.target.value === "" ? "" : parseFloat(e.target.value))
+                          }
+                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
-                      Refilo (mm)
-                    </label>
-                    <input
-                      type="number"
-                      value={trim}
-                      onChange={(e) =>
-                        setTrim(e.target.value === "" ? "" : parseFloat(e.target.value))
-                      }
-                      className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
-                </div>
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
+                          Refilo (mm)
+                        </label>
+                        <input
+                          type="number"
+                          value={trim}
+                          onChange={(e) =>
+                            setTrim(e.target.value === "" ? "" : parseFloat(e.target.value))
+                          }
+                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                    </div>
 
-                {/* ESTOQUE */}
-                <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-xs font-bold text-zinc-400 uppercase">
-                      Estoque de Bobinas (kg)
-                    </label>
-                    <button
-                      onClick={addStockCoil}
-                      className="text-blue-400 hover:text-blue-300 text-xs font-bold flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> Add Bobina
-                    </button>
-                  </div>
-
-                  <div className="max-h-[120px] overflow-y-auto space-y-2">
-                    {stockCoils.map((coil, idx) => (
-                      <div key={coil.id} className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500 font-mono w-4">
-                          {idx + 1}.
-                        </span>
-
-                        <div className="relative flex-1">
-                          <input
-                            type="number"
-                            value={coil.weight}
-                            onChange={(e) => updateStockCoil(coil.id, e.target.value)}
-                            className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 text-sm pr-8"
-                          />
-                          <span className="absolute right-2 top-2 text-xs text-zinc-500">
-                            kg
-                          </span>
-                        </div>
-
+                    {/* ESTOQUE */}
+                    <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-bold text-zinc-400 uppercase">
+                          Estoque de Bobinas (kg)
+                        </label>
                         <button
-                          onClick={() => removeStockCoil(coil.id)}
-                          className="text-red-400 hover:text-red-300 p-1"
+                          onClick={addStockCoil}
+                          className="text-blue-400 hover:text-blue-300 text-xs font-bold flex items-center gap-1"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Plus className="w-3 h-3" /> Add Bobina
                         </button>
                       </div>
-                    ))}
-                  </div>
 
-                  <div className="mt-2 text-right text-xs text-zinc-400 font-bold">
-                    Total Disponível: {totalStockWeight.toLocaleString()} kg
-                  </div>
-                </div>
+                      <div className="max-h-[120px] overflow-y-auto space-y-2">
+                        {stockCoils.map((coil, idx) => (
+                          <div key={coil.id} className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-500 font-mono w-4">
+                              {idx + 1}.
+                            </span>
 
-                {/* FILTROS */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
-                      Tipo Material
-                    </label>
-                    <select
-                      value={coilType}
-                      onChange={(e) => setCoilType(e.target.value)}
-                      className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                    >
-                      {availableTypes.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                value={coil.weight}
+                                onChange={(e) => updateStockCoil(coil.id, e.target.value)}
+                                className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 text-sm pr-8"
+                              />
+                              <span className="absolute right-2 top-2 text-xs text-zinc-500">
+                                kg
+                              </span>
+                            </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">
-                      Espessura (mm)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={coilThickness}
-                      onChange={(e) =>
-                        setCoilThickness(
-                          e.target.value === "" ? "" : parseFloat(e.target.value)
-                        )
-                      }
-                      className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold"
-                    />
-                  </div>
-                </div>
+                            <button
+                              onClick={() => removeStockCoil(coil.id)}
+                              className="text-red-400 hover:text-red-300 p-1"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
 
-                <div className="bg-blue-950/40 p-2 rounded-lg text-xs text-blue-200 text-center border border-blue-900/50">
-                  Largura Útil:{" "}
-                  <strong>
-                    {(Number(motherWidth) || 0) - (Number(trim) || 0)} mm
-                  </strong>
-                </div>
+                      <div className="mt-2 text-right text-xs text-zinc-400 font-bold">
+                        Total Disponivel: {totalStockWeight.toLocaleString()} kg
+                      </div>
+                    </div>
+
+                    {/* FILTROS */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
+                          Tipo Material
+                        </label>
+                        <select
+                          value={coilType}
+                          onChange={(e) => setCoilType(e.target.value)}
+                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                        >
+                          {availableTypes.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">
+                          Espessura (mm)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={coilThickness}
+                          onChange={(e) =>
+                            setCoilThickness(
+                              e.target.value === "" ? "" : parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-950/40 p-2 rounded-lg text-xs text-blue-200 text-center border border-blue-900/50">
+                      Largura util: {" "}
+                      <strong>{(Number(motherWidth) || 0) - (Number(trim) || 0)} mm</strong>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
+                          Largura da Chapa (mm)
+                        </label>
+                        <input
+                          type="number"
+                          value={sheetWidth}
+                          readOnly
+                          className="w-full p-2 border border-zinc-800 rounded-lg bg-zinc-900 text-zinc-300"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
+                          Altura da Chapa (mm)
+                        </label>
+                        <input
+                          type="number"
+                          value={sheetHeight}
+                          readOnly
+                          className="w-full p-2 border border-zinc-800 rounded-lg bg-zinc-900 text-zinc-300"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+                      <p className="text-xs font-bold text-zinc-400 uppercase">
+                        Chapa padrao MDF
+                      </p>
+                      <p className="text-sm text-zinc-300 mt-1">
+                        {sheetWidth} x {sheetHeight} mm
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Organiza pecas retangulares na chapa.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">
+                          Tipo Material
+                        </label>
+                        <select
+                          value={coilType}
+                          onChange={(e) => setCoilType(e.target.value)}
+                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                        >
+                          {availableTypes.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">
+                          Espessura (mm)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={coilThickness}
+                          onChange={(e) =>
+                            setCoilThickness(
+                              e.target.value === "" ? "" : parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
+
             </div>
 
             {/* PEDIDOS */}
             <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
               <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
                 <Box className="w-4 h-4 text-zinc-400" />
-                <h2 className="font-semibold text-zinc-200">Pedidos</h2>
+                <h2 className="font-semibold text-zinc-200">
+                  {cutMode === "longitudinal" ? "Pedidos" : "Demandas de Chapa"}
+                </h2>
               </div>
 
               <div className="p-4">
-                <div className="flex flex-col gap-3 mb-4">
-                  <div className="w-full">
-                    <label className="text-xs text-zinc-400 mb-1 block">
-                      Produto (Filtro: {coilType} |{" "}
-                      {Number(coilThickness).toFixed(2)}mm)
-                    </label>
+                {cutMode === "longitudinal" ? (
+                  <>
+                    <div className="flex flex-col gap-3 mb-4">
+                      <div className="w-full">
+                        <label className="text-xs text-zinc-400 mb-1 block">
+                          Produto (Filtro: {coilType} | {Number(coilThickness).toFixed(2)}mm)
+                        </label>
 
-                    <select
-                      value={selectedProductCode}
-                      onChange={(e) => setSelectedProductCode(e.target.value)}
-                      className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">Selecione um produto...</option>
-                      {availableProducts.length === 0 ? (
-                        <option disabled>
-                          Nenhum produto para {coilType} {coilThickness}mm
-                        </option>
-                      ) : (
-                        availableProducts.map((p) => (
-                          <option key={p.code} value={p.code}>
-                            {p.width}mm - {p.desc}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
+                        <select
+                          value={selectedProductCode}
+                          onChange={(e) => setSelectedProductCode(e.target.value)}
+                          className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="">Selecione um produto...</option>
+                          {availableProducts.length === 0 ? (
+                            <option disabled>
+                              Nenhum produto para {coilType} {coilThickness}mm
+                            </option>
+                          ) : (
+                            availableProducts.map((p) => (
+                              <option key={p.code} value={p.code}>
+                                {p.width}mm - {p.desc}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
 
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <label className="text-xs text-zinc-400 mb-1 block">
-                        Peso Kg
-                      </label>
-                      <input
-                        type="number"
-                        placeholder="kg"
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
-                        className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50"
-                      />
-                    </div>
-
-                    <button
-                      onClick={addDemand}
-                      disabled={!selectedProductCode || !newWeight}
-                      className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="max-h-[300px] overflow-y-auto space-y-2">
-                  {demands.length === 0 && (
-                    <p className="text-center text-zinc-500 text-sm py-4">
-                      Nenhum pedido adicionado.
-                    </p>
-                  )}
-
-                  {demands.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between bg-zinc-950/60 p-2 rounded-lg border border-zinc-800"
-                    >
-                      <div className="flex flex-col max-w-[80%]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-zinc-100">
-                            {item.width}mm
-                          </span>
-                          <span className="text-[10px] bg-blue-950/50 text-blue-200 px-1 rounded border border-blue-900/60 truncate">
-                            {item.desc}
-                          </span>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-zinc-400 mb-1 block">Peso Kg</label>
+                          <input
+                            type="number"
+                            placeholder="kg"
+                            value={newWeight}
+                            onChange={(e) => setNewWeight(e.target.value)}
+                            className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50"
+                          />
                         </div>
 
-                        <span className="text-zinc-400 text-xs">
-                          Meta: {item.targetWeight.toFixed(0)} kg
-                        </span>
+                        <button
+                          onClick={addDemand}
+                          disabled={!selectedProductCode || !newWeight}
+                          className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                      {demands.length === 0 && (
+                        <p className="text-center text-zinc-500 text-sm py-4">
+                          Nenhum pedido adicionado.
+                        </p>
+                      )}
+
+                      {demands.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between bg-zinc-950/60 p-2 rounded-lg border border-zinc-800"
+                        >
+                          <div className="flex flex-col max-w-[80%]">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-zinc-100">{item.width}mm</span>
+                              <span className="text-[10px] bg-blue-950/50 text-blue-200 px-1 rounded border border-blue-900/60 truncate">
+                                {item.desc}
+                              </span>
+                            </div>
+
+                            <span className="text-zinc-400 text-xs">
+                              Meta: {item.targetWeight.toFixed(0)} kg
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => removeDemand(item.id)}
+                            className="text-red-400 hover:text-red-300 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-3 mb-4">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
+                          <input
+                            type="number"
+                            placeholder="ex: 500"
+                            value={sheetPieceWidth}
+                            onChange={(e) => setSheetPieceWidth(e.target.value)}
+                            className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Altura (mm)</label>
+                          <input
+                            type="number"
+                            placeholder="ex: 600"
+                            value={sheetPieceHeight}
+                            onChange={(e) => setSheetPieceHeight(e.target.value)}
+                            className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Qtd</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={sheetPieceQty}
+                            onChange={(e) => setSheetPieceQty(e.target.value)}
+                            className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50"
+                          />
+                        </div>
                       </div>
 
                       <button
-                        onClick={() => removeDemand(item.id)}
-                        className="text-red-400 hover:text-red-300 p-1"
+                        onClick={addSheetDemand}
+                        disabled={!sheetPieceWidth || !sheetPieceHeight || !sheetPieceQty}
+                        className="bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-400 text-zinc-900 font-semibold py-2 rounded-lg"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        Adicionar peca
                       </button>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="max-h-[300px] overflow-y-auto space-y-2">
+                      {sheetDemands.length === 0 && (
+                        <p className="text-center text-zinc-500 text-sm py-4">
+                          Nenhuma peca adicionada.
+                        </p>
+                      )}
+
+                      {sheetDemands.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between bg-zinc-950/60 p-2 rounded-lg border border-zinc-800"
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-bold text-zinc-100">
+                              {item.width} x {item.height} mm
+                            </span>
+                            <span className="text-zinc-400 text-xs">Qtd: {item.qty}</span>
+                          </div>
+
+                          <button
+                            onClick={() => removeSheetDemand(item.id)}
+                            className="text-red-400 hover:text-red-300 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="p-4 bg-zinc-950 border-t border-zinc-800">
                 <button
-                  onClick={calculateOptimization}
-                  disabled={demands.length === 0 || isCalculating}
+                  onClick={
+                    cutMode === "longitudinal"
+                      ? calculateOptimization
+                      : calculateSheetOptimization
+                  }
+                  disabled={
+                    cutMode === "longitudinal"
+                      ? demands.length === 0 || isCalculating
+                      : sheetDemands.length === 0 || isCalculating
+                  }
                   className={`w-full py-3 rounded-xl font-bold text-lg shadow-md flex items-center justify-center gap-2 transition-all ${
                     isCalculating
                       ? "bg-zinc-800 text-zinc-400"
-                      : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                      : cutMode === "longitudinal"
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                      : "bg-amber-500 hover:bg-amber-400 text-zinc-900"
                   }`}
                 >
                   {isCalculating ? (
@@ -1258,9 +2414,55 @@ export default function SlitterOptimizer() {
 
           {/* DIREITA */}
           <div className="lg:col-span-8 space-y-5">
+            {cutMode === "transversal" && sheetSuggestions.length > 0 && (
+              <div className="bg-amber-950/20 border border-amber-800/60 rounded-2xl p-5 shadow-sm animate-fade-in">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-amber-200">
+                      Sugestoes para completar sobras
+                    </h3>
+                    <p className="text-xs text-amber-200/70">
+                      Itens do mesmo tipo/espessura para melhorar o aproveitamento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {sheetSuggestions.map((item, idx) => (
+                    <div
+                      key={`sheet-sug-${idx}`}
+                      className="bg-zinc-950/60 border border-amber-900/40 rounded-xl p-3 flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-100">
+                          Chapa {item.sheetLabel} •{" "}
+                          {item.items && item.items.length > 1 ? "Combo" : "Sugestao"}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          {item.items?.map((it) => (
+                            <span key={`${it.code}-${it.width}-${it.height}`} className="mr-2">
+                              {it.code} {it.width}x{it.height} ({it.qty}x)
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          Preenche {Math.round((item.fillRatio || 0) * 100)}% da sobra
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => addSheetSuggestion(item)}
+                        className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-900"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* SUGESTÕES */}
-            {suggestions.length > 0 && (
+            {cutMode === "longitudinal" && suggestions.length > 0 && (
               <div className="bg-orange-950/30 border border-orange-800/60 rounded-2xl p-5 shadow-sm animate-fade-in">
                 <div className="flex items-start gap-4">
                   <div className="bg-orange-900/50 p-3 rounded-full">
@@ -1368,7 +2570,7 @@ export default function SlitterOptimizer() {
             )}
 
             {/* SEM SUGESTÃO */}
-            {results && results.stats.efficiency < 97 && suggestions.length === 0 && (
+            {cutMode === "longitudinal" && results && results.stats.efficiency < 97 && suggestions.length === 0 && (
               <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 text-center animate-fade-in">
                 <AlertCircle className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
                 <p className="text-zinc-200 font-medium">
@@ -1381,8 +2583,108 @@ export default function SlitterOptimizer() {
               </div>
             )}
 
+            {cutMode === "transversal" && sheetResults && (
+              <div className="animate-fade-in space-y-5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
+                    <p className="text-xs text-zinc-400 uppercase font-bold">
+                      Aproveitamento
+                    </p>
+                    <p className="text-3xl font-bold text-emerald-300">
+                      {sheetResults.stats.efficiency}%
+                    </p>
+                  </div>
+                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
+                    <p className="text-xs text-zinc-400 uppercase font-bold">Total Chapas</p>
+                    <p className="text-3xl font-bold text-zinc-50">
+                      {sheetResults.stats.totalSheets}
+                    </p>
+                  </div>
+                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
+                    <p className="text-xs text-zinc-400 uppercase font-bold">Pecas</p>
+                    <p className="text-3xl font-bold text-zinc-50">
+                      {sheetResults.stats.totalPieces}
+                    </p>
+                  </div>
+                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
+                    <p className="text-xs text-zinc-400 uppercase font-bold">Sobra</p>
+                    <p className="text-3xl font-bold text-orange-300">
+                      {sheetResults.stats.waste}%
+                    </p>
+                  </div>
+                </div>
+
+                {sheetAlert && (
+                  <div className="bg-amber-950/30 border border-amber-800/60 rounded-xl px-4 py-3 text-amber-200 text-sm">
+                    {sheetAlert}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {sheetResults.sheets.map((sheet, idx) => (
+                    <div
+                      key={sheet.id}
+                      className="bg-zinc-900/60 rounded-2xl border border-zinc-800 overflow-hidden shadow-sm"
+                    >
+                      <div className="bg-zinc-950 px-5 py-4 border-b border-zinc-800 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-amber-500 text-zinc-900 font-bold w-10 h-10 rounded-xl flex items-center justify-center text-lg">
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-zinc-50">
+                              Chapa {String.fromCharCode(65 + idx)}
+                            </h4>
+                            <div className="text-sm text-zinc-400">
+                              {sheetWidth} x {sheetHeight} mm
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right text-xs text-zinc-400">
+                          Uso:{" "}
+                          {sheetArea ? Math.round((sheet.usedArea / sheetArea) * 100) : 0}%
+                        </div>
+                      </div>
+
+                      <div className="p-5">
+                        <div
+                          className="relative w-full border border-zinc-800 rounded-xl bg-zinc-950/40 overflow-hidden"
+                          style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}
+                        >
+                          {sheet.placements.map((piece, i) => {
+                            const left = (piece.x / sheetWidth) * 100;
+                            const top = (piece.y / sheetHeight) * 100;
+                            const width = (piece.width / sheetWidth) * 100;
+                            const height = (piece.height / sheetHeight) * 100;
+                            const showLabel = width > 12 && height > 12;
+                            const color = COLORS[i % COLORS.length];
+
+                            return (
+                              <div
+                                key={`${sheet.id}-${i}`}
+                                className={`${color} absolute border border-white/30 text-[10px] text-white flex items-center justify-center`}
+                                style={{
+                                  left: `${left}%`,
+                                  top: `${top}%`,
+                                  width: `${width}%`,
+                                  height: `${height}%`,
+                                }}
+                                title={piece.label}
+                              >
+                                {showLabel ? piece.label : ""}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* RESULTADOS */}
-            {results && (
+            {cutMode === "longitudinal" && results && (
               <div className="animate-fade-in space-y-5">
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1614,17 +2916,23 @@ export default function SlitterOptimizer() {
               </div>
             )}
 
-            {!results && !isCalculating && (
+            {cutMode === "longitudinal" && !results && !isCalculating && (
               <div className="h-full flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/40 rounded-2xl border border-dashed border-zinc-800 p-12">
                 <Scale className="w-16 h-16 mb-4 opacity-50" />
                 <p>Insira demandas para calcular.</p>
+              </div>
+            )}
+            {cutMode === "transversal" && !sheetResults && !isCalculating && (
+              <div className="h-full flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/40 rounded-2xl border border-dashed border-zinc-800 p-12">
+                <Scale className="w-16 h-16 mb-4 opacity-50" />
+                <p>Insira pecas para calcular.</p>
               </div>
             )}
           </div>
         </div>
 
         <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
-          © {new Date().getFullYear()} Slitter Metalosa — Sergio Betini
+          © {new Date().getFullYear()} SmartSlit — Sergio Betini
         </footer>
       </div>
 
