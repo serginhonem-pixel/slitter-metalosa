@@ -13,7 +13,7 @@ import { auth, db, googleProvider } from "../firebase";
 const AuthContext = createContext(null);
 
 // --- MODO LOCAL (sem Firebase configurado) ---
-const FIREBASE_READY = !import.meta.env.VITE_FIREBASE_API_KEY?.startsWith("sua-");
+const FIREBASE_READY = !!import.meta.env.VITE_FIREBASE_API_KEY && !import.meta.env.VITE_FIREBASE_API_KEY.startsWith("sua-");
 
 const LOCAL_USERS_KEY = "smartslit-local-users";
 const LOCAL_SESSION_KEY = "smartslit-local-session";

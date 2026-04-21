@@ -5,7 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 
-const FIREBASE_READY = !import.meta.env.VITE_FIREBASE_API_KEY?.startsWith("sua-");
+const FIREBASE_READY = !!import.meta.env.VITE_FIREBASE_API_KEY && !import.meta.env.VITE_FIREBASE_API_KEY.startsWith("sua-");
 const MAX_FREE_PRODUCTS = 200;
 
 const localKey = (companyId) => `smartslit-products-${companyId}`;
