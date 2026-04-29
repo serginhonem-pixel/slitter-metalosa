@@ -1,3 +1,34 @@
+// DP sem limite de itens — maximiza o uso do espaço restante
+const fillSpaceDP = (capacity, fillerProducts) => {
+  if (!fillerProducts.length || capacity <= 0) return [];
+  const dp = new Array(capacity + 1).fill(-1);
+  const choice = new Array(capacity + 1).fill(null);
+  dp[0] = 0;
+  for (let w = 1; w <= capacity; w++) {
+    for (const p of fillerProducts) {
+      if (p.width <= w && dp[w - p.width] >= 0) {
+        const val = dp[w - p.width] + p.width;
+        if (val > dp[w]) {
+          dp[w] = val;
+          choice[w] = p;
+        }
+      }
+    }
+  }
+  // Encontra o melhor aproveitamento <= capacity
+  let best = 0;
+  for (let w = capacity; w >= 0; w--) {
+    if (dp[w] >= 0) { best = w; break; }
+  }
+  const items = [];
+  let w = best;
+  while (w > 0 && choice[w]) {
+    items.push(choice[w]);
+    w -= choice[w].width;
+  }
+  return items;
+};
+
 const getStripWeight = (width, mWidth, mWeight) => {
   if (!mWidth || !mWeight) return 0;
   const safeWidth = Number(mWidth) || 0;
@@ -55,6 +86,61 @@ export const findBestCombinations = (targetWidth, products) => {
   }
 
   return uniqueResults;
+};
+
+// Gera variações de padrão de corte variando quantidades de cada largura disponível
+export const generatePatternOptions = (usableWidth, allWidths, maxOptions = 10, mandatoryWidths = []) => {
+  if (!allWidths.length || usableWidth <= 0) return [];
+
+  const sorted = [...allWidths].sort((a, b) => b.width - a.width);
+  const candidates = [];
+  const seen = new Set();
+
+  const search = (combo, totalWidth, startIdx) => {
+    if (combo.length > 0) {
+      const key = [...combo].sort((a, b) => a - b).join(',');
+      if (!seen.has(key)) {
+        seen.add(key);
+        const counts = {};
+        combo.forEach((w) => { counts[w] = (counts[w] || 0) + 1; });
+        // Só aceita se todas as larguras de demanda obrigatórias estiverem presentes
+        const hasAllMandatory = mandatoryWidths.every((mw) => counts[mw] > 0);
+        if (hasAllMandatory) {
+          candidates.push({
+            totalWidth,
+            waste: usableWidth - totalWidth,
+            efficiency: ((totalWidth / usableWidth) * 100).toFixed(1),
+            counts,
+          });
+        }
+      }
+    }
+    if (candidates.length > 2000) return;
+    for (let i = startIdx; i < sorted.length; i++) {
+      const p = sorted[i];
+      if (totalWidth + p.width <= usableWidth) {
+        combo.push(p.width);
+        search(combo, totalWidth + p.width, i);
+        combo.pop();
+      }
+    }
+  };
+
+  search([], 0, 0);
+
+  candidates.sort((a, b) => a.waste - b.waste);
+
+  // Retorna variações diversas: evita mostrar combinações quase iguais
+  const result = [];
+  const usedTotals = new Set();
+  for (const c of candidates) {
+    if (!usedTotals.has(c.totalWidth)) {
+      usedTotals.add(c.totalWidth);
+      result.push(c);
+    }
+    if (result.length >= maxOptions) break;
+  }
+  return result;
 };
 
 export const generateSuggestions = (
@@ -119,37 +205,62 @@ export const generateSuggestions = (
   return potentialSuggestions;
 };
 
-export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, availableProducts }) => {
+export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, availableProducts, fillerWidths = [] }) => {
   const safeMotherWidth = Number(motherWidth);
   const safeTrim = Number(trim) || 0;
   const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
 
-  const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
+  const isQtyMode = demands.some((d) => d.targetQty != null);
 
   let allItems = [];
   const demandAnalysis = {};
-  const avgCoilWeight = totalAvailableWeight / stockCoils.length;
 
-  demands.forEach((d) => {
-    const estimatedStripWeight = getStripWeight(d.width, usableWidth, avgCoilWeight);
-    const safeStripWeight = estimatedStripWeight > 0 ? estimatedStripWeight : 1;
-    const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
-
-    demandAnalysis[d.width] = {
-      reqWeight: d.targetWeight,
-      producedQty: 0,
-      producedWeight: 0,
-      desc: d.desc,
-    };
-
-    for (let i = 0; i < qtyNeeded; i++) {
-      allItems.push({ width: d.width, desc: d.desc, code: d.code });
-    }
-  });
+  if (isQtyMode) {
+    demands.forEach((d) => {
+      const qty = Number(d.targetQty) || 0;
+      demandAnalysis[d.width] = {
+        reqQty: qty,
+        producedQty: 0,
+        producedWeight: 0,
+        desc: d.desc,
+        isQtyMode: true,
+      };
+      for (let i = 0; i < qty; i++) {
+        allItems.push({ width: d.width, desc: d.desc, code: d.code });
+      }
+    });
+  } else {
+    const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
+    const avgCoilWeight = totalAvailableWeight / (stockCoils.length || 1);
+    demands.forEach((d) => {
+      const estimatedStripWeight = getStripWeight(d.width, usableWidth, avgCoilWeight);
+      const safeStripWeight = estimatedStripWeight > 0 ? estimatedStripWeight : 1;
+      const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
+      demandAnalysis[d.width] = {
+        reqWeight: d.targetWeight,
+        producedQty: 0,
+        producedWeight: 0,
+        desc: d.desc,
+      };
+      for (let i = 0; i < qtyNeeded; i++) {
+        allItems.push({ width: d.width, desc: d.desc, code: d.code });
+      }
+    });
+  }
 
   allItems.sort((a, b) => b.width - a.width);
 
-  let availableCoils = [...stockCoils].map((c) => ({
+  const avgStockWeight =
+    stockCoils.length > 0
+      ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length
+      : 10000;
+
+  // Em modo qtd geramos bobinas virtuais suficientes; em modo kg usamos o estoque real
+  const coilPool = isQtyMode
+    ? Array.from({ length: allItems.length }, (_, i) => ({ id: `v-${i}`, weight: avgStockWeight }))
+    : [...stockCoils];
+
+  let availableCoils = coilPool.map((c) => ({
     ...c,
     items: [],
     currentWidth: 0,
@@ -175,6 +286,32 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
     }
     // Se não couber em nenhuma bobina do estoque, ignora (aparece como déficit na demanda)
   });
+
+  // Preencher sobras com larguras complementares (fillerWidths)
+  const fillerAnalysis = {};
+  if (fillerWidths.length > 0) {
+    const fillerProducts = fillerWidths.map((fw) => ({
+      width: fw.width,
+      desc: fw.desc || `${fw.width}mm`,
+      code: `F-${fw.width}`,
+      history: 0,
+    }));
+    fillerWidths.forEach((fw) => {
+      fillerAnalysis[fw.width] = { desc: fw.desc || `${fw.width}mm`, producedQty: 0, producedWeight: 0 };
+    });
+
+    availableCoils.forEach((coil) => {
+      const remaining = usableWidth - coil.currentWidth;
+      if (remaining <= 0) return;
+      // DP sem limite de itens — encontra a melhor combinação para preencher a sobra
+      const fillerItems = fillSpaceDP(remaining, fillerProducts);
+      fillerItems.forEach((fItem) => {
+        coil.items.push({ width: fItem.width, desc: fItem.desc, code: fItem.code, isFiller: true });
+        coil.currentWidth += fItem.width;
+        if (fillerAnalysis[fItem.width]) fillerAnalysis[fItem.width].producedQty++;
+      });
+    });
+  }
 
   const allUsedCoils = availableCoils.filter((c) => c.items.length > 0);
 
@@ -235,9 +372,33 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
       ? ((totalInputWeight - totalScrapWeight) / totalInputWeight) * 100
       : 0;
 
+  // Calcular peso produzido por filler (usando peso médio das bobinas usadas)
+  if (fillerWidths.length > 0) {
+    allUsedCoils.forEach((coil) => {
+      coil.items.forEach((item) => {
+        if (item.isFiller && fillerAnalysis[item.width]) {
+          fillerAnalysis[item.width].producedWeight += getStripWeight(item.width, usableWidth, coil.weight);
+        }
+      });
+    });
+  }
+
+  // Gera variações de padrão quando há larguras complementares definidas
+  let patternOptions = null;
+  if (fillerWidths.length > 0) {
+    const allWidthsForOptions = [
+      ...demands.map((d) => ({ width: d.width, desc: d.desc, code: d.code })),
+      ...fillerWidths.map((fw) => ({ width: fw.width, desc: fw.desc || `${fw.width}mm`, code: `F-${fw.width}` })),
+    ];
+    const mandatoryWidths = demands.map((d) => d.width);
+    patternOptions = generatePatternOptions(usableWidth, allWidthsForOptions, 10, mandatoryWidths);
+  }
+
   const results = {
     patterns: patternsArray,
     demandAnalysis,
+    fillerAnalysis: Object.keys(fillerAnalysis).length > 0 ? fillerAnalysis : null,
+    patternOptions,
     stats: {
       totalCoils: allUsedCoils.length,
       totalInputWeight,
@@ -249,13 +410,20 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
   let foundSuggestions = [];
   if (efficiency < 97 || patternsArray.some((p) => usableWidth - p.usedWidth > 50)) {
     const totalUseful = totalInputWeight - totalScrapWeight;
-    foundSuggestions = generateSuggestions(
-      patternsArray,
-      usableWidth,
-      totalUseful,
-      totalInputWeight,
-      availableProducts
-    );
+    // Se o usuário definiu larguras complementares, usar elas nas sugestões; senão, usar catálogo
+    const suggestionPool =
+      fillerWidths.length > 0
+        ? fillerWidths.map((fw) => ({ width: fw.width, desc: fw.desc || `${fw.width}mm`, code: `F-${fw.width}`, history: 0 }))
+        : availableProducts;
+    if (suggestionPool.length > 0) {
+      foundSuggestions = generateSuggestions(
+        patternsArray,
+        usableWidth,
+        totalUseful,
+        totalInputWeight,
+        suggestionPool
+      );
+    }
   }
 
   return { results, suggestions: foundSuggestions };

@@ -46,6 +46,17 @@ export default function AppPage() {
   const [demands, setDemands] = useState([]);
   const [selectedProductCode, setSelectedProductCode] = useState("");
   const [newWeight, setNewWeight] = useState("");
+  const [demandInputMode, setDemandInputMode] = useState("catalog"); // "catalog" | "manual"
+  const [demandWeightMode, setDemandWeightMode] = useState("kg"); // "kg" | "qty"
+  const [fillerWidths, setFillerWidths] = useState([]); // larguras complementares
+  const [selectedPatternOption, setSelectedPatternOption] = useState(null); // índice da opção selecionada
+  const [newFillerWidth, setNewFillerWidth] = useState("");
+  const [newFillerDesc, setNewFillerDesc] = useState("");
+  const [manualWidth, setManualWidth] = useState("");
+  const [manualDesc, setManualDesc] = useState("");
+  const [manualWeight, setManualWeight] = useState("");
+  const [manualQty, setManualQty] = useState("");
+  const [catalogQty, setCatalogQty] = useState("");
 
   const [sheetWidth] = useState(1850);
   const [sheetHeight] = useState(2750);
@@ -139,20 +150,63 @@ export default function AppPage() {
 
   const addDemand = () => {
     const product = activeDb.find((p) => p.code === selectedProductCode);
-    const weightVal = parseFloat(newWeight);
-    if (!product || !weightVal) return;
+    if (!product) return;
     const safeMotherWidth = Number(motherWidth) || 0;
     const safeTrim = Number(trim) || 0;
     if (product.width > safeMotherWidth - safeTrim) {
       alert("Erro: Largura do produto é maior que a largura útil da bobina.");
       return;
     }
-    setDemands([...demands, {
-      id: Date.now(), code: product.code, desc: product.desc,
-      width: product.width, targetWeight: weightVal,
-    }]);
+    if (demandWeightMode === "qty") {
+      const qtyVal = parseInt(catalogQty, 10);
+      if (!qtyVal || qtyVal <= 0) return;
+      setDemands([...demands, {
+        id: Date.now(), code: product.code, desc: product.desc,
+        width: product.width, targetQty: qtyVal,
+      }]);
+      setCatalogQty("");
+    } else {
+      const weightVal = parseFloat(newWeight);
+      if (!weightVal) return;
+      setDemands([...demands, {
+        id: Date.now(), code: product.code, desc: product.desc,
+        width: product.width, targetWeight: weightVal,
+      }]);
+      setNewWeight("");
+    }
     setSelectedProductCode("");
-    setNewWeight("");
+    setResults(null);
+    setSuggestions([]);
+    setWeightAlert(null);
+  };
+
+  const addManualDemand = () => {
+    const widthVal = parseFloat(manualWidth);
+    if (!widthVal) return;
+    const safeMotherWidth = Number(motherWidth) || 0;
+    const safeTrim = Number(trim) || 0;
+    if (widthVal > safeMotherWidth - safeTrim) {
+      alert("Erro: Largura informada é maior que a largura útil da bobina.");
+      return;
+    }
+    const desc = manualDesc.trim() || `${widthVal}mm manual`;
+    if (demandWeightMode === "qty") {
+      const qtyVal = parseInt(manualQty, 10);
+      if (!qtyVal || qtyVal <= 0) return;
+      setDemands([...demands, {
+        id: Date.now(), code: "MAN", desc, width: widthVal, targetQty: qtyVal,
+      }]);
+      setManualQty("");
+    } else {
+      const weightVal = parseFloat(manualWeight);
+      if (!weightVal) return;
+      setDemands([...demands, {
+        id: Date.now(), code: "MAN", desc, width: widthVal, targetWeight: weightVal,
+      }]);
+      setManualWeight("");
+    }
+    setManualWidth("");
+    setManualDesc("");
     setResults(null);
     setSuggestions([]);
     setWeightAlert(null);
@@ -265,6 +319,7 @@ export default function AppPage() {
     setCoilThickness(2.0);
     setCoilType("BQ");
     setDemands([]);
+    setFillerWidths([]);
     setSheetDemands([]);
     setHasSeededSheet(false);
     resetOutputs();
@@ -281,23 +336,26 @@ export default function AppPage() {
     setSuggestions([]);
     setWeightAlert(null);
 
-    const totalDemandWeight = demands.reduce((acc, d) => acc + d.targetWeight, 0);
-    const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
-
-    if (totalDemandWeight > totalAvailableWeight) {
-      const diff = totalDemandWeight - totalAvailableWeight;
-      setWeightAlert({
-        msg: `A demanda (${totalDemandWeight.toLocaleString()} kg) é maior que o estoque (${totalAvailableWeight.toLocaleString()} kg).`,
-        subMsg: `Faltam aproximadamente ${diff.toLocaleString()} kg. Adicione mais bobinas clicando em "+".`,
-      });
+    const isQtyMode = demands.some((d) => d.targetQty != null);
+    if (!isQtyMode) {
+      const totalDemandWeight = demands.reduce((acc, d) => acc + (d.targetWeight || 0), 0);
+      const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
+      if (totalDemandWeight > totalAvailableWeight) {
+        const diff = totalDemandWeight - totalAvailableWeight;
+        setWeightAlert({
+          msg: `A demanda (${totalDemandWeight.toLocaleString()} kg) é maior que o estoque (${totalAvailableWeight.toLocaleString()} kg).`,
+          subMsg: `Faltam aproximadamente ${diff.toLocaleString()} kg. Adicione mais bobinas clicando em "+".`,
+        });
+      }
     }
 
     setTimeout(() => {
       const { results: res, suggestions: sug } = calculateOptimization({
-        motherWidth, trim, stockCoils, demands, availableProducts,
+        motherWidth, trim, stockCoils, demands, availableProducts, fillerWidths,
       });
       setResults(res);
       setSuggestions(sug);
+      setSelectedPatternOption(null);
       setIsCalculating(false);
     }, 600);
   };
@@ -327,6 +385,160 @@ export default function AppPage() {
         setIsCalculating(false);
       }
     }, 300);
+  };
+
+  // ---- PRINT PATTERN OPTIONS ----
+  const printPatternOptions = () => {
+    if (!results?.patternOptions?.length) return;
+    const win = window.open("", "_blank");
+    if (!win) { alert("Permita pop-ups para imprimir."); return; }
+
+    const PRINT_COLORS = ["#3b82f6","#22c55e","#eab308","#a855f7","#ec4899","#f97316","#14b8a6","#ef4444","#8b5cf6","#06b6d4"];
+
+    const cards = results.patternOptions.map((opt, idx) => {
+      const entries = Object.entries(opt.counts);
+      const mw = Number(motherWidth);
+
+      const bars = entries.map(([w, qty], i) => {
+        const pct = (Number(w) * qty / mw * 100).toFixed(2);
+        return `<div style="width:${pct}%;background:${PRINT_COLORS[i % PRINT_COLORS.length]};height:100%;display:flex;align-items:center;justify-content:center;border-right:2px solid #fff;box-sizing:border-box;">
+          ${pct > 8 ? `<span style="color:#fff;font-size:10px;font-weight:700;">${qty}×${w}</span>` : ""}
+        </div>`;
+      }).join("");
+      const wastePct = (opt.waste / mw * 100).toFixed(2);
+      const wasteBar = opt.waste > 0 ? `<div style="width:${wastePct}%;background:#fee2e2;height:100%;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#b91c1c;font-size:9px;font-weight:700;">${opt.waste}mm</span>
+      </div>` : "";
+
+      const pills = entries.map(([w, qty], i) =>
+        `<span style="display:inline-block;background:${PRINT_COLORS[i % PRINT_COLORS.length]};color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;margin:2px;">${qty}× ${w}mm</span>`
+      ).join(" ");
+
+      const effColor = Number(opt.efficiency) >= 97 ? "#16a34a" : Number(opt.efficiency) >= 90 ? "#d97706" : "#dc2626";
+
+      return `<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:16px;overflow:hidden;page-break-inside:avoid;">
+        <div style="background:#f8fafc;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;">
+          <strong style="font-size:14px;">Opção ${idx + 1}</strong>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <span style="color:${effColor};font-weight:800;font-size:15px;">${opt.efficiency}%</span>
+            <span style="color:#6b7280;font-size:12px;">Sobra: ${opt.waste}mm</span>
+          </div>
+        </div>
+        <div style="padding:12px;">
+          <div style="height:36px;width:100%;background:#e5e7eb;border-radius:6px;overflow:hidden;display:flex;margin-bottom:10px;">${bars}${wasteBar}</div>
+          <div>${pills}</div>
+          <table style="width:100%;margin-top:10px;font-size:11px;border-collapse:collapse;">
+            <thead><tr style="background:#f1f5f9;"><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Largura</th><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Qtd</th><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Ocupação</th></tr></thead>
+            <tbody>${entries.map(([w, qty]) => `<tr><td style="padding:5px 8px;border-bottom:1px solid #f3f4f6;">${w}mm</td><td style="padding:5px 8px;border-bottom:1px solid #f3f4f6;">${qty}</td><td style="padding:5px 8px;border-bottom:1px solid #f3f4f6;">${(Number(w) * qty / mw * 100).toFixed(1)}%</td></tr>`).join("")}
+            <tr style="background:#fef2f2;"><td style="padding:5px 8px;font-weight:700;color:#b91c1c;">SUCATA</td><td style="padding:5px 8px;">—</td><td style="padding:5px 8px;font-weight:700;color:#b91c1c;">${opt.waste}mm (${(opt.waste/mw*100).toFixed(1)}%)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join("");
+
+    const fillerList = fillerWidths.length > 0
+      ? `Larguras complementares: ${fillerWidths.map(f => f.width + "mm").join(", ")}`
+      : "";
+
+    win.document.write(`<html><head><title>SmartSlit | Variações de Corte</title>
+    <style>
+      body{font-family:system-ui,Arial;padding:32px;color:#111827;max-width:900px;margin:auto}
+      h1{font-size:20px;border-bottom:2px solid #111827;padding-bottom:8px;margin-bottom:6px}
+      .meta{font-size:12px;color:#6b7280;margin-bottom:20px}
+      .print-btn{position:fixed;bottom:18px;right:18px;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;text-decoration:none;cursor:pointer;border:none;font-size:14px;}
+      @media print{.print-btn{display:none}body{padding:12px}}
+    </style>
+    </head><body>
+      <h1>SmartSlit — Variações de Padrão de Corte</h1>
+      <div class="meta">
+        Data: ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp;
+        Empresa: ${userProfile?.companyName || "—"} &nbsp;|&nbsp;
+        Bobina mãe: ${motherWidth}mm &nbsp;|&nbsp;
+        Material: ${coilType} ${coilThickness}mm &nbsp;|&nbsp;
+        Refilo: ${trim}mm
+        ${fillerList ? `&nbsp;|&nbsp; ${fillerList}` : ""}
+      </div>
+      ${cards}
+      <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    </body></html>`);
+    win.document.close();
+  };
+
+  // ---- PRINT SINGLE PATTERN OPTION ----
+  const printSinglePatternOption = (opt, idx) => {
+    const win = window.open("", "_blank");
+    if (!win) { alert("Permita pop-ups para imprimir."); return; }
+
+    const PRINT_COLORS = ["#3b82f6","#22c55e","#eab308","#a855f7","#ec4899","#f97316","#14b8a6","#ef4444","#8b5cf6","#06b6d4"];
+    const allWidthDescMap = {};
+    demands.forEach((d) => { allWidthDescMap[d.width] = d.desc || `${d.width}mm`; });
+    fillerWidths.forEach((fw) => { allWidthDescMap[fw.width] = fw.desc || `${fw.width}mm`; });
+
+    const entries = Object.entries(opt.counts);
+    const mw = Number(motherWidth);
+
+    // Gera coordenadas de setup
+    let pos = 0;
+    const coords = [];
+    entries.forEach(([w, qty], colorIdx) => {
+      for (let i = 0; i < qty; i++) {
+        coords.push({ start: pos, width: Number(w), end: pos + Number(w), desc: allWidthDescMap[Number(w)] || `${w}mm`, colorIdx });
+        pos += Number(w);
+      }
+    });
+
+    const bars = entries.map(([w, qty], i) => {
+      const pct = (Number(w) * qty / mw * 100).toFixed(2);
+      return `<div style="width:${pct}%;background:${PRINT_COLORS[i%PRINT_COLORS.length]};height:100%;display:flex;align-items:center;justify-content:center;border-right:2px solid #fff;box-sizing:border-box;">
+        ${pct > 8 ? `<span style="color:#fff;font-weight:700;font-size:11px;">${qty}×${w}</span>` : ""}
+      </div>`;
+    }).join("");
+    const wastePct = (opt.waste / mw * 100).toFixed(2);
+    const wasteBar = opt.waste > 0 ? `<div style="width:${wastePct}%;background:#fee2e2;height:100%;display:flex;align-items:center;justify-content:center;"><span style="color:#b91c1c;font-size:10px;font-weight:700;">${opt.waste}mm</span></div>` : "";
+
+    const avgCWp = stockCoils.length > 0 ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length : 10000;
+    const usableWp = Math.max(1, Number(motherWidth) - (Number(trim) || 0));
+    const estWp = (w) => Math.round((Number(w) / usableWp) * avgCWp);
+    const rows = coords.map((c, i) =>
+      `<tr><td>${i+1}</td><td style="color:#2563eb;font-weight:600;">${c.start}mm</td><td style="font-weight:800;font-size:14px;">${c.width}mm</td><td>${c.end}mm</td><td>${c.desc}</td><td style="color:#16a34a;font-weight:600;">~${estWp(c.width).toLocaleString()} kg</td></tr>`
+    ).join("");
+    const scrapRow = opt.waste > 0
+      ? `<tr style="background:#fef2f2;color:#b91c1c;font-weight:700;"><td>Ref</td><td>${pos}mm</td><td>${opt.waste}mm</td><td>${mw}mm</td><td>SUCATA / SOBRA</td><td>~${estWp(opt.waste).toLocaleString()} kg</td></tr>`
+      : "";
+
+    const effColor = Number(opt.efficiency) >= 97 ? "#16a34a" : Number(opt.efficiency) >= 90 ? "#d97706" : "#dc2626";
+    win.document.write(`<html><head><title>SmartSlit | Opção ${idx+1}</title>
+    <style>
+      body{font-family:system-ui,Arial;padding:32px;color:#111827;max-width:800px;margin:auto}
+      h1{font-size:20px;border-bottom:2px solid #111827;padding-bottom:8px;margin-bottom:6px}
+      .meta{font-size:12px;color:#6b7280;margin-bottom:20px}
+      table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
+      th,td{padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:left}
+      th{background:#f1f5f9;font-size:11px;text-transform:uppercase;color:#6b7280}
+      .print-btn{position:fixed;bottom:18px;right:18px;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;cursor:pointer;border:none;font-size:14px;}
+      @media print{.print-btn{display:none}body{padding:12px}}
+    </style></head><body>
+      <h1>SmartSlit — Padrão de Corte · Opção ${idx+1}</h1>
+      <div class="meta">
+        Data: ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp;
+        Empresa: ${userProfile?.companyName || "—"} &nbsp;|&nbsp;
+        Bobina mãe: ${motherWidth}mm &nbsp;|&nbsp;
+        Material: ${coilType} ${coilThickness}mm &nbsp;|&nbsp;
+        Refilo: ${trim}mm
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <strong style="font-size:16px;">Eficiência: <span style="color:${effColor}">${opt.efficiency}%</span></strong>
+        <span style="color:#6b7280;font-size:13px;">Sucata: ${opt.waste}mm</span>
+      </div>
+      <div style="height:44px;width:100%;background:#e5e7eb;border-radius:8px;overflow:hidden;display:flex;margin-bottom:20px;">${bars}${wasteBar}</div>
+      <table>
+        <thead><tr><th>#</th><th>Início</th><th>Corte</th><th>Fim</th><th>Produto</th><th>Peso est.</th></tr></thead>
+        <tbody>${rows}${scrapRow}</tbody>
+      </table>
+      <button class="print-btn" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    </body></html>`);
+    win.document.close();
   };
 
   // ---- PDF REPORT (unchanged) ----
@@ -620,9 +832,16 @@ export default function AppPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Tipo Material</label>
-                        <select value={coilType} onChange={(e) => setCoilType(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold">
-                          {availableTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                        <input
+                          list="material-types-list"
+                          value={coilType}
+                          onChange={(e) => setCoilType(e.target.value.toUpperCase())}
+                          placeholder="ex: BQ, BZ..."
+                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                        />
+                        <datalist id="material-types-list">
+                          {availableTypes.map((t) => <option key={t} value={t} />)}
+                        </datalist>
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">Espessura (mm)</label>
@@ -654,9 +873,13 @@ export default function AppPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Tipo Material</label>
-                        <select value={coilType} onChange={(e) => setCoilType(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold">
-                          {availableTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                        <input
+                          list="material-types-list"
+                          value={coilType}
+                          onChange={(e) => setCoilType(e.target.value.toUpperCase())}
+                          placeholder="ex: BQ, BZ..."
+                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                        />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">Espessura (mm)</label>
@@ -678,44 +901,153 @@ export default function AppPage() {
               <div className="p-4">
                 {cutMode === "longitudinal" ? (
                   <>
+                    {/* Toggle Catálogo / Manual */}
+                    <div className="flex gap-1 mb-2 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800">
+                      <button
+                        onClick={() => setDemandInputMode("catalog")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "catalog" ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                      >
+                        Catálogo
+                      </button>
+                      <button
+                        onClick={() => setDemandInputMode("manual")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "manual" ? "bg-violet-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                      >
+                        Manual
+                      </button>
+                    </div>
+
+                    {/* Toggle Por Kg / Por Qtd */}
+                    <div className="flex gap-1 mb-4 bg-zinc-950/40 p-1 rounded-xl border border-zinc-800/60">
+                      <button
+                        onClick={() => setDemandWeightMode("kg")}
+                        className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition ${demandWeightMode === "kg" ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+                      >
+                        Por Kg
+                      </button>
+                      <button
+                        onClick={() => setDemandWeightMode("qty")}
+                        className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition ${demandWeightMode === "qty" ? "bg-amber-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+                      >
+                        Por Qtd (bobinas)
+                      </button>
+                    </div>
+
                     <div className="flex flex-col gap-3 mb-4">
-                      <div className="w-full">
-                        <label className="text-xs text-zinc-400 mb-1 block">
-                          Produto (Filtro: {coilType} | {Number(coilThickness).toFixed(2)}mm)
-                        </label>
-                        <select value={selectedProductCode} onChange={(e) => setSelectedProductCode(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none">
-                          <option value="">Selecione um produto...</option>
-                          {availableProducts.length === 0
-                            ? <option disabled>Nenhum produto para {coilType} {coilThickness}mm</option>
-                            : availableProducts.map((p) => <option key={p.code} value={p.code}>{p.width}mm - {p.desc}</option>)
-                          }
-                        </select>
-                      </div>
-                      <div className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <label className="text-xs text-zinc-400 mb-1 block">Peso Kg</label>
-                          <input type="number" placeholder="kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
-                        </div>
-                        <button onClick={addDemand} disabled={!selectedProductCode || !newWeight} className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center">
-                          <Plus className="w-5 h-5" />
-                        </button>
-                      </div>
+                      {demandInputMode === "catalog" ? (
+                        <>
+                          <div className="w-full">
+                            <label className="text-xs text-zinc-400 mb-1 block">
+                              Produto (Filtro: {coilType} | {Number(coilThickness).toFixed(2)}mm)
+                            </label>
+                            <select value={selectedProductCode} onChange={(e) => setSelectedProductCode(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                              <option value="">Selecione um produto...</option>
+                              {availableProducts.length === 0
+                                ? <option disabled>Nenhum produto para {coilType} {coilThickness}mm</option>
+                                : availableProducts.map((p) => <option key={p.code} value={p.code}>{p.width}mm - {p.desc}</option>)
+                              }
+                            </select>
+                          </div>
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              {demandWeightMode === "kg" ? (
+                                <>
+                                  <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
+                                  <input type="number" placeholder="ex: 3000" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
+                                </>
+                              ) : (
+                                <>
+                                  <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas filhas</label>
+                                  <input type="number" min="1" placeholder="ex: 10" value={catalogQty} onChange={(e) => setCatalogQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
+                                </>
+                              )}
+                            </div>
+                            <button
+                              onClick={addDemand}
+                              disabled={!selectedProductCode || (demandWeightMode === "kg" ? !newWeight : !catalogQty)}
+                              className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
+                              <input
+                                type="number"
+                                placeholder="ex: 250"
+                                value={manualWidth}
+                                onChange={(e) => setManualWidth(e.target.value)}
+                                className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              {demandWeightMode === "kg" ? (
+                                <>
+                                  <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
+                                  <input type="number" placeholder="ex: 3000" value={manualWeight} onChange={(e) => setManualWeight(e.target.value)} className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none" />
+                                </>
+                              ) : (
+                                <>
+                                  <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas</label>
+                                  <input type="number" min="1" placeholder="ex: 10" value={manualQty} onChange={(e) => setManualQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <label className="text-xs text-zinc-400 mb-1 block">Descrição (opcional)</label>
+                              <input
+                                type="text"
+                                placeholder="ex: Tampa lateral"
+                                value={manualDesc}
+                                onChange={(e) => setManualDesc(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && addManualDemand()}
+                                className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
+                              />
+                            </div>
+                            <button
+                              onClick={addManualDemand}
+                              disabled={!manualWidth || (demandWeightMode === "kg" ? !manualWeight : !manualQty)}
+                              className="bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="max-h-[300px] overflow-y-auto space-y-2">
                       {demands.length === 0 && <p className="text-center text-zinc-500 text-sm py-4">Nenhum pedido adicionado.</p>}
-                      {demands.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between bg-zinc-950/60 p-2 rounded-lg border border-zinc-800">
-                          <div className="flex flex-col max-w-[80%]">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-zinc-100">{item.width}mm</span>
-                              <span className="text-[10px] bg-blue-950/50 text-blue-200 px-1 rounded border border-blue-900/60 truncate">{item.desc}</span>
+                      {demands.map((item) => {
+                        const isManual = item.code === "MAN";
+                        return (
+                          <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg border ${isManual ? "bg-violet-950/20 border-violet-800/50" : "bg-zinc-950/60 border-zinc-800"}`}>
+                            <div className="flex flex-col max-w-[80%]">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-zinc-100">{item.width}mm</span>
+                                <span className={`text-[10px] px-1 rounded border truncate ${isManual ? "bg-violet-950/50 text-violet-200 border-violet-900/60" : "bg-blue-950/50 text-blue-200 border-blue-900/60"}`}>
+                                  {isManual ? "manual" : item.desc}
+                                </span>
+                                {!isManual && item.desc && <span className="text-[10px] text-zinc-500 truncate hidden sm:inline">{item.desc}</span>}
+                              </div>
+                              {isManual && item.desc && item.desc !== `${item.width}mm manual` && (
+                                <span className="text-zinc-400 text-xs">{item.desc}</span>
+                              )}
+                              {item.targetQty != null
+                                ? <span className="text-amber-400 text-xs font-semibold">Qtd: {item.targetQty} bobina{item.targetQty !== 1 ? "s" : ""}</span>
+                                : <span className="text-zinc-400 text-xs">Meta: {item.targetWeight?.toFixed(0)} kg</span>
+                              }
                             </div>
-                            <span className="text-zinc-400 text-xs">Meta: {item.targetWeight.toFixed(0)} kg</span>
+                            <button onClick={() => removeDemand(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
                           </div>
-                          <button onClick={() => removeDemand(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </>
                 ) : (
@@ -769,6 +1101,84 @@ export default function AppPage() {
                 </button>
               </div>
             </div>
+
+            {/* LARGURAS COMPLEMENTARES */}
+            {cutMode === "longitudinal" && (
+              <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
+                <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
+                  <Ruler className="w-4 h-4 text-amber-400" />
+                  <h2 className="font-semibold text-zinc-200">Larguras para complementar</h2>
+                  <span className="text-[10px] text-zinc-500 ml-1">opcional — preenchem as sobras</span>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex gap-2">
+                    <div>
+                      <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
+                      <input
+                        type="number"
+                        placeholder="ex: 170"
+                        value={newFillerWidth}
+                        onChange={(e) => setNewFillerWidth(e.target.value)}
+                        className="w-24 p-2 border border-amber-700/50 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-zinc-400 mb-1 block">Descrição (opcional)</label>
+                      <input
+                        type="text"
+                        placeholder="ex: Chapa A"
+                        value={newFillerDesc}
+                        onChange={(e) => setNewFillerDesc(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          const w = parseFloat(newFillerWidth);
+                          if (!w) return;
+                          setFillerWidths((prev) => [...prev, { id: Date.now(), width: w, desc: newFillerDesc.trim() || `${w}mm` }]);
+                          setNewFillerWidth("");
+                          setNewFillerDesc("");
+                          setResults(null);
+                        }}
+                        className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={() => {
+                          const w = parseFloat(newFillerWidth);
+                          if (!w) return;
+                          setFillerWidths((prev) => [...prev, { id: Date.now(), width: w, desc: newFillerDesc.trim() || `${w}mm` }]);
+                          setNewFillerWidth("");
+                          setNewFillerDesc("");
+                          setResults(null);
+                        }}
+                        disabled={!newFillerWidth}
+                        className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-10 flex items-center justify-center"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {fillerWidths.length === 0 ? (
+                    <p className="text-center text-zinc-600 text-xs py-2">Nenhuma largura complementar. O sistema usará só os pedidos acima.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {fillerWidths.map((fw) => (
+                        <div key={fw.id} className="flex items-center gap-1 bg-amber-950/30 border border-amber-800/50 rounded-lg px-2 py-1">
+                          <span className="text-amber-200 text-xs font-bold">{fw.width}mm</span>
+                          {fw.desc !== `${fw.width}mm` && <span className="text-amber-200/60 text-[10px]">{fw.desc}</span>}
+                          <button
+                            onClick={() => { setFillerWidths((prev) => prev.filter((f) => f.id !== fw.id)); setResults(null); }}
+                            className="text-red-400 hover:text-red-300 ml-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* LOCAL PRESET (secondary) */}
             <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 p-3 text-xs">
@@ -958,16 +1368,208 @@ export default function AppPage() {
                     {Object.entries(results.demandAnalysis).map(([width, data]) => (
                       <div key={width} className="flex justify-between text-xs border-b border-zinc-800 py-1">
                         <span className="text-zinc-300">{width}mm:</span>
-                        <span className={data.producedWeight >= data.reqWeight ? "text-emerald-300" : "text-red-300"}>
-                          {Math.round(data.producedWeight)}/{data.reqWeight.toFixed(0)}kg
-                        </span>
+                        {data.isQtyMode
+                          ? <span className={data.producedQty >= data.reqQty ? "text-emerald-300" : "text-red-300"}>
+                              {data.producedQty}/{data.reqQty} bob.
+                            </span>
+                          : <span className={data.producedWeight >= data.reqWeight ? "text-emerald-300" : "text-red-300"}>
+                              {Math.round(data.producedWeight)}/{data.reqWeight.toFixed(0)}kg
+                            </span>
+                        }
                       </div>
                     ))}
                   </div>
                 </div>
 
+                {/* PATTERN OPTIONS / VARIAÇÕES */}
+                {results.patternOptions && results.patternOptions.length > 0 && (
+                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl overflow-hidden">
+                    <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-blue-400" />
+                        <h3 className="font-semibold text-zinc-200">Variações de padrão disponíveis</h3>
+                        <span className="text-[10px] text-zinc-500 ml-1 hidden sm:inline">diferentes combinações — mesma bobina mãe</span>
+                      </div>
+                      <button
+                        onClick={printPatternOptions}
+                        className="inline-flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        Imprimir todas
+                      </button>
+                    </div>
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {(() => {
+                        const avgCoilWeight = stockCoils.length > 0
+                          ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length
+                          : 10000;
+                        const usableW = Math.max(1, (Number(motherWidth) || 0) - (Number(trim) || 0));
+                        const weightFor = (width, qty) => Math.round((Number(width) / usableW) * avgCoilWeight * qty);
+                        return results.patternOptions.map((opt, idx) => {
+                        const entries = Object.entries(opt.counts);
+                        const isSelected = selectedPatternOption === idx;
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setSelectedPatternOption(isSelected ? null : idx)}
+                            className={`rounded-xl p-3 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-950/30" : "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600"}`}
+                          >
+                            <div className="flex justify-between items-center mb-2">
+                              <span className={`text-xs font-bold uppercase ${isSelected ? "text-blue-300" : "text-zinc-500"}`}>
+                                {isSelected ? "✓ " : ""}Opção {idx + 1}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${Number(opt.efficiency) >= 97 ? "bg-emerald-950/40 text-emerald-300 border-emerald-900/50" : Number(opt.efficiency) >= 90 ? "bg-yellow-950/40 text-yellow-300 border-yellow-900/50" : "bg-red-950/40 text-red-300 border-red-900/50"}`}>
+                                  {opt.efficiency}%
+                                </span>
+                                <span className="text-[10px] text-zinc-500">Sobra: {opt.waste}mm</span>
+                              </div>
+                            </div>
+                            <div className="h-7 w-full bg-zinc-800 rounded-lg overflow-hidden flex border border-zinc-700 mb-2">
+                              {entries.map(([w, qty], i) => {
+                                const pct = (Number(w) * qty / Number(motherWidth)) * 100;
+                                return (
+                                  <div key={w} className={`${COLORS[i % COLORS.length]} h-full border-r border-white/20 flex items-center justify-center`} style={{ width: `${pct}%` }} title={`${qty}× ${w}mm`}>
+                                    {pct > 10 && <span className="text-white text-[9px] font-bold">{qty}×{w}</span>}
+                                  </div>
+                                );
+                              })}
+                              {opt.waste > 0 && (
+                                <div className="h-full bg-red-950/40 flex items-center justify-center" style={{ width: `${(opt.waste / Number(motherWidth)) * 100}%` }}>
+                                  {(opt.waste / Number(motherWidth)) * 100 > 5 && <span className="text-red-400 text-[9px] font-bold">{opt.waste}mm</span>}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {entries.map(([w, qty], i) => (
+                                <div key={w} className={`flex flex-col items-center px-2 py-1 rounded-lg font-semibold ${COLORS[i % COLORS.length]} text-white`} style={{minWidth: 60}}>
+                                  <span className="text-[11px] font-bold leading-tight">{qty}× {w}mm</span>
+                                  <span className="text-[10px] opacity-80 leading-tight">~{weightFor(w, qty).toLocaleString()}kg</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      });})()}
+                    </div>
+
+                    {/* DETALHE DA OPÇÃO SELECIONADA */}
+                    {selectedPatternOption !== null && results.patternOptions[selectedPatternOption] && (() => {
+                      const opt = results.patternOptions[selectedPatternOption];
+                      const entries = Object.entries(opt.counts);
+                      const allWidthDescMap = {};
+                      demands.forEach((d) => { allWidthDescMap[d.width] = d.desc || `${d.width}mm`; });
+                      fillerWidths.forEach((fw) => { allWidthDescMap[fw.width] = fw.desc || `${fw.width}mm`; });
+                      let pos = 0;
+                      const coords = [];
+                      entries.forEach(([w, qty], colorIdx) => {
+                        for (let i = 0; i < qty; i++) {
+                          coords.push({ start: pos, width: Number(w), end: pos + Number(w), desc: allWidthDescMap[Number(w)] || `${w}mm`, colorIdx });
+                          pos += Number(w);
+                        }
+                      });
+                      const mw = Number(motherWidth);
+                      const avgCW = stockCoils.length > 0 ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length : 10000;
+                      const usableW2 = Math.max(1, mw - (Number(trim) || 0));
+                      const estWeight = (w) => Math.round((Number(w) / usableW2) * avgCW);
+                      return (
+                        <div className="mx-4 mb-4 border-t border-zinc-700 pt-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-bold text-zinc-100 text-sm">
+                              Mapa de Setup — Opção {selectedPatternOption + 1}
+                              <span className={`ml-2 text-xs px-2 py-0.5 rounded border font-bold ${Number(opt.efficiency) >= 97 ? "bg-emerald-950/40 text-emerald-300 border-emerald-900/50" : "bg-yellow-950/40 text-yellow-300 border-yellow-900/50"}`}>
+                                {opt.efficiency}%
+                              </span>
+                            </h4>
+                            <button
+                              onClick={() => printSinglePatternOption(opt, selectedPatternOption)}
+                              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                            >
+                              <Printer className="w-3.5 h-3.5" /> Imprimir esta opção
+                            </button>
+                          </div>
+                          {/* barra grande */}
+                          <div className="h-12 w-full bg-zinc-800 rounded-xl overflow-hidden flex border-2 border-zinc-700 mb-4">
+                            {entries.map(([w, qty], i) => {
+                              const pct = (Number(w) * qty / mw) * 100;
+                              return (
+                                <div key={w} className={`${COLORS[i % COLORS.length]} h-full border-r-2 border-white/30 flex items-center justify-center`} style={{ width: `${pct}%` }}>
+                                  {pct > 8 && <span className="text-white font-bold text-sm">{w}</span>}
+                                </div>
+                              );
+                            })}
+                            {opt.waste > 0 && (
+                              <div className="h-full bg-red-950/40 border-l border-red-900/40 flex items-center justify-center" style={{ width: `${(opt.waste / mw) * 100}%` }}>
+                                <span className="text-red-300 text-xs font-bold">LIVRE</span>
+                              </div>
+                            )}
+                          </div>
+                          {/* tabela */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-zinc-700">
+                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">#</th>
+                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Início</th>
+                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Corte</th>
+                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Fim</th>
+                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Produto</th>
+                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Peso est.</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {coords.map((c, i) => (
+                                  <tr key={i} className="border-b border-zinc-800/60">
+                                    <td className="py-2 px-3 text-zinc-400">{i + 1}</td>
+                                    <td className="py-2 px-3 text-blue-400 font-mono text-xs">{c.start}mm</td>
+                                    <td className="py-2 px-3 font-bold text-zinc-100">{c.width}mm</td>
+                                    <td className="py-2 px-3 text-zinc-400 font-mono text-xs">{c.end}mm</td>
+                                    <td className="py-2 px-3 text-zinc-300">{c.desc}</td>
+                                    <td className="py-2 px-3 text-emerald-400 font-semibold text-xs">~{estWeight(c.width).toLocaleString()} kg</td>
+                                  </tr>
+                                ))}
+                                {opt.waste > 0 && (
+                                  <tr className="bg-red-950/20">
+                                    <td className="py-2 px-3 text-red-400 font-bold">Ref</td>
+                                    <td className="py-2 px-3 text-red-400 font-mono text-xs">{pos}mm</td>
+                                    <td className="py-2 px-3 font-bold text-red-400">{opt.waste}mm</td>
+                                    <td className="py-2 px-3 text-red-400 font-mono text-xs">{mw}mm</td>
+                                    <td className="py-2 px-3 text-red-400 font-bold">SUCATA / SOBRA</td>
+                                    <td className="py-2 px-3 text-red-400 text-xs">~{estWeight(opt.waste).toLocaleString()} kg</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* FILLER RESULTS */}
+                {results.fillerAnalysis && (
+                  <div className="bg-amber-950/20 border border-amber-800/50 rounded-2xl p-4">
+                    <p className="text-xs text-amber-300 uppercase font-bold mb-3 flex items-center gap-2">
+                      <Ruler className="w-3.5 h-3.5" /> Larguras complementares — produção estimada
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {Object.entries(results.fillerAnalysis).map(([width, data]) => (
+                        <div key={width} className="bg-zinc-950/60 border border-amber-900/30 rounded-xl p-3">
+                          <p className="text-amber-200 font-bold text-lg">{width}mm</p>
+                          <p className="text-zinc-300 text-sm">{data.desc}</p>
+                          <div className="mt-2 space-y-0.5">
+                            <p className="text-xs text-zinc-400">Qtd: <span className="text-amber-300 font-semibold">{data.producedQty} bobinas</span></p>
+                            <p className="text-xs text-zinc-400">Peso: <span className="text-amber-300 font-semibold">~{Math.round(data.producedWeight)} kg</span></p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4">
-                  {results.patterns.map((pattern, idx) => {
+                  {!results.patternOptions && results.patterns.map((pattern, idx) => {
                     const visualMotherWidth = Number(motherWidth);
                     const patternEfficiency = ((pattern.usedWidth / visualMotherWidth) * 100).toFixed(1);
                     const uniqueCuts = [...new Set(pattern.cuts)];
