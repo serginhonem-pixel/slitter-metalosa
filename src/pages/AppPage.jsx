@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 
 import { parseCSV, DEFAULT_CSV_DATA, COLORS } from "../utils/parseCSV";
-import { calculateOptimization, calculateSheetOptimization } from "../utils/optimizationEngine";
+import { calculateOptimization } from "../utils/optimizationEngine";
 import { exportPlanToExcel } from "../utils/exportExcel";
 
 import { useAuth } from "../contexts/AuthContext";
@@ -36,7 +36,6 @@ export default function AppPage() {
   }, [cloudProducts]);
 
   // ---- MACHINE STATE ----
-  const [cutMode, setCutMode] = useState("longitudinal");
   const [motherWidth, setMotherWidth] = useState(1200);
   const [stockCoils, setStockCoils] = useState([{ id: 1, weight: 10000 }]);
   const [trim, setTrim] = useState(20);
@@ -58,22 +57,11 @@ export default function AppPage() {
   const [manualQty, setManualQty] = useState("");
   const [catalogQty, setCatalogQty] = useState("");
 
-  const [sheetWidth] = useState(1850);
-  const [sheetHeight] = useState(2750);
-  const [sheetDemands, setSheetDemands] = useState([]);
-  const [sheetPieceWidth, setSheetPieceWidth] = useState("");
-  const [sheetPieceHeight, setSheetPieceHeight] = useState("");
-  const [sheetPieceQty, setSheetPieceQty] = useState(1);
-  const [hasSeededSheet, setHasSeededSheet] = useState(false);
-  const [sheetSuggestions, setSheetSuggestions] = useState([]);
-
   const [results, setResults] = useState(null);
-  const [sheetResults, setSheetResults] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [showDb, setShowDb] = useState(false);
   const [weightAlert, setWeightAlert] = useState(null);
-  const [sheetAlert, setSheetAlert] = useState("");
   const [presetStatus, setPresetStatus] = useState("");
   const [hasSavedPreset, setHasSavedPreset] = useState(false);
 
@@ -90,8 +78,6 @@ export default function AppPage() {
     setHasSavedPreset(Boolean(raw));
     if (raw && companyId) setShowMigrationBanner(true);
   }, [companyId]);
-
-  useEffect(() => { resetOutputs(); }, [cutMode]);
 
   const availableProducts = useMemo(() => {
     const safeThickness = Number(coilThickness) || 0;
@@ -113,22 +99,6 @@ export default function AppPage() {
   }, [activeDb]);
 
   useEffect(() => {
-    if (cutMode !== "transversal") return;
-    if (sheetDemands.length > 0 || hasSeededSheet) return;
-    const heights = [600, 900, 1200, 750];
-    const baseProducts = availableProducts.slice(0, 4);
-    if (!baseProducts.length) return;
-    const seeded = baseProducts.map((p, idx) => ({
-      id: Date.now() + idx, width: p.width,
-      height: heights[idx % heights.length], qty: 2, code: p.code, isFiller: false,
-    }));
-    setSheetDemands(seeded);
-    setSheetResults(null);
-    setSheetAlert("");
-    setHasSeededSheet(true);
-  }, [cutMode, availableProducts, sheetDemands.length, hasSeededSheet]);
-
-  useEffect(() => {
     if (selectedProductCode) {
       const stillValid = availableProducts.some((p) => p.code === selectedProductCode);
       if (!stillValid) setSelectedProductCode("");
@@ -137,7 +107,6 @@ export default function AppPage() {
 
   // ---- HELPERS ----
   const totalStockWeight = useMemo(() => stockCoils.reduce((acc, c) => acc + c.weight, 0), [stockCoils]);
-  const sheetArea = useMemo(() => sheetWidth * sheetHeight, [sheetWidth, sheetHeight]);
 
   const addStockCoil = () => setStockCoils([...stockCoils, { id: Date.now(), weight: 10000 }]);
   const updateStockCoil = (id, val) => {
@@ -214,11 +183,8 @@ export default function AppPage() {
 
   const resetOutputs = () => {
     setResults(null);
-    setSheetResults(null);
     setSuggestions([]);
-    setSheetSuggestions([]);
     setWeightAlert(null);
-    setSheetAlert("");
     setIsCalculating(false);
   };
 
@@ -240,37 +206,6 @@ export default function AppPage() {
     setResults(null);
     setSuggestions([]);
     setWeightAlert(null);
-  };
-
-  const addSheetDemand = () => {
-    const widthVal = parseFloat(sheetPieceWidth);
-    const heightVal = parseFloat(sheetPieceHeight);
-    const qtyVal = parseInt(sheetPieceQty, 10);
-    if (!widthVal || !heightVal || !qtyVal) return;
-    setSheetDemands((prev) => [...prev, { id: Date.now(), width: widthVal, height: heightVal, qty: qtyVal, isFiller: false }]);
-    setSheetPieceWidth("");
-    setSheetPieceHeight("");
-    setSheetPieceQty(1);
-    setSheetResults(null);
-    setSheetAlert("");
-  };
-
-  const removeSheetDemand = (id) => {
-    setSheetDemands(sheetDemands.filter((d) => d.id !== id));
-    setSheetResults(null);
-    setSheetAlert("");
-  };
-
-  const addSheetSuggestion = (suggestion) => {
-    const items = Array.isArray(suggestion.items)
-      ? suggestion.items
-      : [{ width: suggestion.width, height: suggestion.height, qty: suggestion.qty, code: suggestion.code }];
-    setSheetDemands((prev) => [
-      ...prev,
-      ...items.map((item) => ({ id: Date.now() + Math.random(), width: item.width, height: item.height, qty: item.qty, code: item.code, isFiller: true })),
-    ]);
-    setSheetResults(null);
-    setSheetAlert("");
   };
 
   // ---- LOCAL PRESET (kept for backward compat) ----
@@ -320,8 +255,6 @@ export default function AppPage() {
     setCoilType("BQ");
     setDemands([]);
     setFillerWidths([]);
-    setSheetDemands([]);
-    setHasSeededSheet(false);
     resetOutputs();
     setPresetStatus("Configurações resetadas.");
   };
@@ -358,33 +291,6 @@ export default function AppPage() {
       setSelectedPatternOption(null);
       setIsCalculating(false);
     }, 600);
-  };
-
-  const runCalculateSheetOptimization = () => {
-    if (!sheetDemands.length) return;
-    setIsCalculating(true);
-    setSheetResults(null);
-    setSheetAlert("");
-    setSheetSuggestions([]);
-
-    setTimeout(() => {
-      try {
-        const { sheetResults: res, sheetSuggestions: sug } = calculateSheetOptimization({
-          sheetWidth, sheetHeight, sheetDemands, availableProducts,
-        });
-        setSheetResults(res);
-        setSheetSuggestions(sug);
-
-        const alertParts = [];
-        if (res.oversize?.length) alertParts.push(`${res.oversize.length} peça(s) não cabem na chapa.`);
-        if (alertParts.length) setSheetAlert(alertParts.join(" "));
-      } catch (err) {
-        console.error(err);
-        setSheetAlert("Não foi possível calcular o corte transversal.");
-      } finally {
-        setIsCalculating(false);
-      }
-    }, 300);
   };
 
   // ---- PRINT PATTERN OPTIONS ----
@@ -597,7 +503,7 @@ export default function AppPage() {
   const handleSavePlan = async (name) => {
     if (!results) return;
     const machineConfig = { motherWidth, trim, coilThickness, coilType, stockCoils };
-    await savePlan(name, cutMode, machineConfig, demands, results);
+    await savePlan(name, "longitudinal", machineConfig, demands, results);
     setSaveStatus("Plano salvo!");
     setTimeout(() => setSaveStatus(""), 3000);
   };
@@ -620,7 +526,6 @@ export default function AppPage() {
     setResults(plan.results ?? null);
     setSuggestions([]);
     setWeightAlert(null);
-    setCutMode(plan.mode ?? "longitudinal");
   };
 
   return (
@@ -678,7 +583,7 @@ export default function AppPage() {
               )}
             </button>
 
-            {cutMode === "longitudinal" && results && (
+            {results && (
               <>
                 <button
                   onClick={() => setShowSaveModal(true)}
@@ -741,7 +646,7 @@ export default function AppPage() {
         )}
 
         {/* WEIGHT ALERT */}
-        {cutMode === "longitudinal" && weightAlert && (
+        {weightAlert && (
           <div className="bg-yellow-950/30 border border-yellow-700/50 p-4 rounded-xl shadow-sm animate-fade-in flex items-start gap-3">
             <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-1" />
             <div>
@@ -757,376 +662,260 @@ export default function AppPage() {
           <CatalogManager companyId={companyId} activeDb={activeDb} />
         )}
 
-        {/* MODE TABS */}
-        <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-2 flex flex-wrap gap-2">
-          <button
-            onClick={() => setCutMode("longitudinal")}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition border ${
-              cutMode === "longitudinal"
-                ? "bg-emerald-600 text-white border-emerald-500/60"
-                : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900"
-            }`}
-          >
-            Corte Longitudinal
-          </button>
-          <button
-            onClick={() => setCutMode("transversal")}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition border ${
-              cutMode === "transversal"
-                ? "bg-amber-500 text-zinc-900 border-amber-400/80"
-                : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:bg-zinc-900"
-            }`}
-          >
-            Corte Transversal
-          </button>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
           {/* LEFT PANEL */}
-          <div className="lg:col-span-4 space-y-5">
+          <div className="lg:col-span-4 space-y-4">
 
-            {/* MACHINE CONFIG */}
+            {/* PASSO 1 — MÁQUINA */}
             <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
-              <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
+              <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <Settings className="w-4 h-4 text-zinc-400" />
                 <h2 className="font-semibold text-zinc-200">Configuração da Máquina</h2>
               </div>
 
               <div className="p-4 space-y-4">
-                {cutMode === "longitudinal" ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Largura (mm)</label>
-                        <input type="number" value={motherWidth} onChange={(e) => setMotherWidth(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Refilo (mm)</label>
-                        <input type="number" value={trim} onChange={(e) => setTrim(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none" />
-                      </div>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Largura (mm)</label>
+                    <input type="number" value={motherWidth} onChange={(e) => setMotherWidth(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Refilo (mm)</label>
+                    <input type="number" value={trim} onChange={(e) => setTrim(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                </div>
 
-                    <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
-                      <div className="flex justify-between items-center mb-2">
-                        <label className="block text-xs font-bold text-zinc-400 uppercase">Estoque de Bobinas (kg)</label>
-                        <button onClick={addStockCoil} className="text-blue-400 hover:text-blue-300 text-xs font-bold flex items-center gap-1">
-                          <Plus className="w-3 h-3" /> Add Bobina
+                <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-xs font-bold text-zinc-400 uppercase">Estoque de Bobinas (kg)</label>
+                    <button onClick={addStockCoil} className="text-blue-400 hover:text-blue-300 text-xs font-bold flex items-center gap-1">
+                      <Plus className="w-3 h-3" /> Add Bobina
+                    </button>
+                  </div>
+                  <div className="max-h-[120px] overflow-y-auto space-y-2">
+                    {stockCoils.map((coil, idx) => (
+                      <div key={coil.id} className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-500 font-mono w-4">{idx + 1}.</span>
+                        <div className="relative flex-1">
+                          <input type="number" value={coil.weight} onChange={(e) => updateStockCoil(coil.id, e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 text-sm pr-8" />
+                          <span className="absolute right-2 top-2 text-xs text-zinc-500">kg</span>
+                        </div>
+                        <button onClick={() => removeStockCoil(coil.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-right text-xs text-zinc-400 font-bold">Total: {totalStockWeight.toLocaleString()} kg</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Tipo Material</label>
+                    <input
+                      list="material-types-list"
+                      value={coilType}
+                      onChange={(e) => setCoilType(e.target.value.toUpperCase())}
+                      placeholder="ex: BQ, BZ..."
+                      className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                    />
+                    <datalist id="material-types-list">
+                      {availableTypes.map((t) => <option key={t} value={t} />)}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">Espessura (mm)</label>
+                    <input type="number" step="0.01" value={coilThickness} onChange={(e) => setCoilThickness(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold" />
+                  </div>
+                </div>
+
+                <div className="bg-blue-950/40 p-2 rounded-lg text-xs text-blue-200 text-center border border-blue-900/50">
+                  Largura útil: <strong>{(Number(motherWidth) || 0) - (Number(trim) || 0)} mm</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* PASSO 2 — PEDIDOS */}
+            <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
+              <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+                <Box className="w-4 h-4 text-zinc-400" />
+                <h2 className="font-semibold text-zinc-200">Pedidos</h2>
+              </div>
+
+              <div className="p-4 space-y-3">
+                {/* Toggles numa linha só */}
+                <div className="flex gap-2">
+                  <div className="flex gap-1 flex-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800">
+                    <button
+                      onClick={() => setDemandInputMode("catalog")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "catalog" ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                    >
+                      Catálogo
+                    </button>
+                    <button
+                      onClick={() => setDemandInputMode("manual")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "manual" ? "bg-violet-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                    >
+                      Manual
+                    </button>
+                  </div>
+                  <div className="flex gap-1 flex-1 bg-zinc-950/40 p-1 rounded-xl border border-zinc-800/60">
+                    <button
+                      onClick={() => setDemandWeightMode("kg")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandWeightMode === "kg" ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+                    >
+                      Por Kg
+                    </button>
+                    <button
+                      onClick={() => setDemandWeightMode("qty")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandWeightMode === "qty" ? "bg-amber-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+                    >
+                      Por Qtd
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inputs */}
+                <div className="flex flex-col gap-3">
+                  {demandInputMode === "catalog" ? (
+                    <>
+                      <div className="w-full">
+                        <label className="text-xs text-zinc-400 mb-1 block">
+                          Produto — {coilType} {Number(coilThickness).toFixed(2)}mm
+                        </label>
+                        <select value={selectedProductCode} onChange={(e) => setSelectedProductCode(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                          <option value="">Selecione um produto...</option>
+                          {availableProducts.length === 0
+                            ? <option disabled>Nenhum produto para {coilType} {coilThickness}mm</option>
+                            : availableProducts.map((p) => <option key={p.code} value={p.code}>{p.width}mm — {p.desc}</option>)
+                          }
+                        </select>
+                      </div>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          {demandWeightMode === "kg" ? (
+                            <>
+                              <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
+                              <input type="number" placeholder="ex: 3000" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
+                            </>
+                          ) : (
+                            <>
+                              <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas filhas</label>
+                              <input type="number" min="1" placeholder="ex: 10" value={catalogQty} onChange={(e) => setCatalogQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={addDemand}
+                          disabled={!selectedProductCode || (demandWeightMode === "kg" ? !newWeight : !catalogQty)}
+                          className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                        >
+                          <Plus className="w-5 h-5" />
                         </button>
                       </div>
-                      <div className="max-h-[120px] overflow-y-auto space-y-2">
-                        {stockCoils.map((coil, idx) => (
-                          <div key={coil.id} className="flex items-center gap-2">
-                            <span className="text-xs text-zinc-500 font-mono w-4">{idx + 1}.</span>
-                            <div className="relative flex-1">
-                              <input type="number" value={coil.weight} onChange={(e) => updateStockCoil(coil.id, e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 text-sm pr-8" />
-                              <span className="absolute right-2 top-2 text-xs text-zinc-500">kg</span>
-                            </div>
-                            <button onClick={() => removeStockCoil(coil.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-2 text-right text-xs text-zinc-400 font-bold">Total Disponivel: {totalStockWeight.toLocaleString()} kg</div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Tipo Material</label>
-                        <input
-                          list="material-types-list"
-                          value={coilType}
-                          onChange={(e) => setCoilType(e.target.value.toUpperCase())}
-                          placeholder="ex: BQ, BZ..."
-                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                        />
-                        <datalist id="material-types-list">
-                          {availableTypes.map((t) => <option key={t} value={t} />)}
-                        </datalist>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">Espessura (mm)</label>
-                        <input type="number" step="0.01" value={coilThickness} onChange={(e) => setCoilThickness(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold" />
-                      </div>
-                    </div>
-
-                    <div className="bg-blue-950/40 p-2 rounded-lg text-xs text-blue-200 text-center border border-blue-900/50">
-                      Largura util: <strong>{(Number(motherWidth) || 0) - (Number(trim) || 0)} mm</strong>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Largura da Chapa (mm)</label>
-                        <input type="number" value={sheetWidth} readOnly className="w-full p-2 border border-zinc-800 rounded-lg bg-zinc-900 text-zinc-300" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Altura da Chapa (mm)</label>
-                        <input type="number" value={sheetHeight} readOnly className="w-full p-2 border border-zinc-800 rounded-lg bg-zinc-900 text-zinc-300" />
-                      </div>
-                    </div>
-                    <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
-                      <p className="text-xs font-bold text-zinc-400 uppercase">Chapa padrao MDF</p>
-                      <p className="text-sm text-zinc-300 mt-1">{sheetWidth} x {sheetHeight} mm</p>
-                      <p className="text-xs text-zinc-500 mt-1">Organiza pecas retangulares na chapa.</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Tipo Material</label>
-                        <input
-                          list="material-types-list"
-                          value={coilType}
-                          onChange={(e) => setCoilType(e.target.value.toUpperCase())}
-                          placeholder="ex: BQ, BZ..."
-                          className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">Espessura (mm)</label>
-                        <input type="number" step="0.01" value={coilThickness} onChange={(e) => setCoilThickness(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold" />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* ORDERS */}
-            <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
-              <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
-                <Box className="w-4 h-4 text-zinc-400" />
-                <h2 className="font-semibold text-zinc-200">{cutMode === "longitudinal" ? "Pedidos" : "Demandas de Chapa"}</h2>
-              </div>
-
-              <div className="p-4">
-                {cutMode === "longitudinal" ? (
-                  <>
-                    {/* Toggle Catálogo / Manual */}
-                    <div className="flex gap-1 mb-2 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800">
-                      <button
-                        onClick={() => setDemandInputMode("catalog")}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "catalog" ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
-                      >
-                        Catálogo
-                      </button>
-                      <button
-                        onClick={() => setDemandInputMode("manual")}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "manual" ? "bg-violet-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
-                      >
-                        Manual
-                      </button>
-                    </div>
-
-                    {/* Toggle Por Kg / Por Qtd */}
-                    <div className="flex gap-1 mb-4 bg-zinc-950/40 p-1 rounded-xl border border-zinc-800/60">
-                      <button
-                        onClick={() => setDemandWeightMode("kg")}
-                        className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition ${demandWeightMode === "kg" ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
-                      >
-                        Por Kg
-                      </button>
-                      <button
-                        onClick={() => setDemandWeightMode("qty")}
-                        className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition ${demandWeightMode === "qty" ? "bg-amber-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
-                      >
-                        Por Qtd (bobinas)
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-3 mb-4">
-                      {demandInputMode === "catalog" ? (
-                        <>
-                          <div className="w-full">
-                            <label className="text-xs text-zinc-400 mb-1 block">
-                              Produto (Filtro: {coilType} | {Number(coilThickness).toFixed(2)}mm)
-                            </label>
-                            <select value={selectedProductCode} onChange={(e) => setSelectedProductCode(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none">
-                              <option value="">Selecione um produto...</option>
-                              {availableProducts.length === 0
-                                ? <option disabled>Nenhum produto para {coilType} {coilThickness}mm</option>
-                                : availableProducts.map((p) => <option key={p.code} value={p.code}>{p.width}mm - {p.desc}</option>)
-                              }
-                            </select>
-                          </div>
-                          <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              {demandWeightMode === "kg" ? (
-                                <>
-                                  <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
-                                  <input type="number" placeholder="ex: 3000" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
-                                </>
-                              ) : (
-                                <>
-                                  <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas filhas</label>
-                                  <input type="number" min="1" placeholder="ex: 10" value={catalogQty} onChange={(e) => setCatalogQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
-                                </>
-                              )}
-                            </div>
-                            <button
-                              onClick={addDemand}
-                              disabled={!selectedProductCode || (demandWeightMode === "kg" ? !newWeight : !catalogQty)}
-                              className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
-                            >
-                              <Plus className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
-                              <input
-                                type="number"
-                                placeholder="ex: 250"
-                                value={manualWidth}
-                                onChange={(e) => setManualWidth(e.target.value)}
-                                className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              {demandWeightMode === "kg" ? (
-                                <>
-                                  <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
-                                  <input type="number" placeholder="ex: 3000" value={manualWeight} onChange={(e) => setManualWeight(e.target.value)} className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none" />
-                                </>
-                              ) : (
-                                <>
-                                  <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas</label>
-                                  <input type="number" min="1" placeholder="ex: 10" value={manualQty} onChange={(e) => setManualQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              <label className="text-xs text-zinc-400 mb-1 block">Descrição (opcional)</label>
-                              <input
-                                type="text"
-                                placeholder="ex: Tampa lateral"
-                                value={manualDesc}
-                                onChange={(e) => setManualDesc(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && addManualDemand()}
-                                className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
-                              />
-                            </div>
-                            <button
-                              onClick={addManualDemand}
-                              disabled={!manualWidth || (demandWeightMode === "kg" ? !manualWeight : !manualQty)}
-                              className="bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
-                            >
-                              <Plus className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
-                      {demands.length === 0 && <p className="text-center text-zinc-500 text-sm py-4">Nenhum pedido adicionado.</p>}
-                      {demands.map((item) => {
-                        const isManual = item.code === "MAN";
-                        return (
-                          <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg border ${isManual ? "bg-violet-950/20 border-violet-800/50" : "bg-zinc-950/60 border-zinc-800"}`}>
-                            <div className="flex flex-col max-w-[80%]">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-zinc-100">{item.width}mm</span>
-                                <span className={`text-[10px] px-1 rounded border truncate ${isManual ? "bg-violet-950/50 text-violet-200 border-violet-900/60" : "bg-blue-950/50 text-blue-200 border-blue-900/60"}`}>
-                                  {isManual ? "manual" : item.desc}
-                                </span>
-                                {!isManual && item.desc && <span className="text-[10px] text-zinc-500 truncate hidden sm:inline">{item.desc}</span>}
-                              </div>
-                              {isManual && item.desc && item.desc !== `${item.width}mm manual` && (
-                                <span className="text-zinc-400 text-xs">{item.desc}</span>
-                              )}
-                              {item.targetQty != null
-                                ? <span className="text-amber-400 text-xs font-semibold">Qtd: {item.targetQty} bobina{item.targetQty !== 1 ? "s" : ""}</span>
-                                : <span className="text-zinc-400 text-xs">Meta: {item.targetWeight?.toFixed(0)} kg</span>
-                              }
-                            </div>
-                            <button onClick={() => removeDemand(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex flex-col gap-3 mb-4">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
                           <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
-                          <input type="number" placeholder="ex: 500" value={sheetPieceWidth} onChange={(e) => setSheetPieceWidth(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
+                          <input
+                            type="number"
+                            placeholder="ex: 250"
+                            value={manualWidth}
+                            onChange={(e) => setManualWidth(e.target.value)}
+                            className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
+                          />
                         </div>
-                        <div>
-                          <label className="text-xs text-zinc-400 mb-1 block">Altura (mm)</label>
-                          <input type="number" placeholder="ex: 600" value={sheetPieceHeight} onChange={(e) => setSheetPieceHeight(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-zinc-400 mb-1 block">Qtd</label>
-                          <input type="number" min="1" value={sheetPieceQty} onChange={(e) => setSheetPieceQty(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
+                        <div className="flex-1">
+                          {demandWeightMode === "kg" ? (
+                            <>
+                              <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
+                              <input type="number" placeholder="ex: 3000" value={manualWeight} onChange={(e) => setManualWeight(e.target.value)} className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none" />
+                            </>
+                          ) : (
+                            <>
+                              <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas</label>
+                              <input type="number" min="1" placeholder="ex: 10" value={manualQty} onChange={(e) => setManualQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
+                            </>
+                          )}
                         </div>
                       </div>
-                      <button onClick={addSheetDemand} disabled={!sheetPieceWidth || !sheetPieceHeight || !sheetPieceQty} className="bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:text-zinc-400 text-zinc-900 font-semibold py-2 rounded-lg">
-                        Adicionar peca
-                      </button>
-                    </div>
-                    <div className="max-h-[300px] overflow-y-auto space-y-2">
-                      {sheetDemands.length === 0 && <p className="text-center text-zinc-500 text-sm py-4">Nenhuma peca adicionada.</p>}
-                      {sheetDemands.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between bg-zinc-950/60 p-2 rounded-lg border border-zinc-800">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-zinc-100">{item.width} x {item.height} mm</span>
-                            <span className="text-zinc-400 text-xs">Qtd: {item.qty}</span>
-                          </div>
-                          <button onClick={() => removeSheetDemand(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                      <div className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-zinc-400 mb-1 block">Descrição (opcional)</label>
+                          <input
+                            type="text"
+                            placeholder="ex: Tampa lateral"
+                            value={manualDesc}
+                            onChange={(e) => setManualDesc(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && addManualDemand()}
+                            className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
+                          />
                         </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="p-4 bg-zinc-950 border-t border-zinc-800">
-                <button
-                  onClick={cutMode === "longitudinal" ? runCalculateOptimization : runCalculateSheetOptimization}
-                  disabled={cutMode === "longitudinal" ? (demands.length === 0 || isCalculating) : (sheetDemands.length === 0 || isCalculating)}
-                  className={`w-full py-3 rounded-xl font-bold text-lg shadow-md flex items-center justify-center gap-2 transition-all ${
-                    isCalculating ? "bg-zinc-800 text-zinc-400"
-                    : cutMode === "longitudinal" ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                    : "bg-amber-500 hover:bg-amber-400 text-zinc-900"
-                  }`}
-                >
-                  {isCalculating ? "Calculando..." : <><Calculator className="w-5 h-5" /> Gerar Plano</>}
-                </button>
-              </div>
-            </div>
-
-            {/* LARGURAS COMPLEMENTARES */}
-            {cutMode === "longitudinal" && (
-              <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
-                <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
-                  <Ruler className="w-4 h-4 text-amber-400" />
-                  <h2 className="font-semibold text-zinc-200">Larguras para complementar</h2>
-                  <span className="text-[10px] text-zinc-500 ml-1">opcional — preenchem as sobras</span>
+                        <button
+                          onClick={addManualDemand}
+                          disabled={!manualWidth || (demandWeightMode === "kg" ? !manualWeight : !manualQty)}
+                          className="bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex gap-2">
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
+
+                {/* Lista de pedidos */}
+                <div className="max-h-[240px] overflow-y-auto space-y-2">
+                  {demands.length === 0 && <p className="text-center text-zinc-600 text-sm py-3">Nenhum pedido adicionado.</p>}
+                  {demands.map((item) => {
+                    const isManual = item.code === "MAN";
+                    return (
+                      <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg border ${isManual ? "bg-violet-950/20 border-violet-800/50" : "bg-zinc-950/60 border-zinc-800"}`}>
+                        <div className="flex flex-col max-w-[80%]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-zinc-100">{item.width}mm</span>
+                            <span className={`text-[10px] px-1 rounded border truncate ${isManual ? "bg-violet-950/50 text-violet-200 border-violet-900/60" : "bg-blue-950/50 text-blue-200 border-blue-900/60"}`}>
+                              {isManual ? "manual" : item.desc}
+                            </span>
+                          </div>
+                          {isManual && item.desc && item.desc !== `${item.width}mm manual` && (
+                            <span className="text-zinc-400 text-xs">{item.desc}</span>
+                          )}
+                          {item.targetQty != null
+                            ? <span className="text-amber-400 text-xs font-semibold">Qtd: {item.targetQty} bobina{item.targetQty !== 1 ? "s" : ""}</span>
+                            : <span className="text-zinc-400 text-xs">Meta: {item.targetWeight?.toFixed(0)} kg</span>
+                          }
+                        </div>
+                        <button onClick={() => removeDemand(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Larguras complementares — dentro do card */}
+                <details className="group">
+                  <summary className="flex items-center gap-2 cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition select-none py-1">
+                    <Ruler className="w-3.5 h-3.5 text-amber-500/70" />
+                    <span>Larguras para complementar sobras</span>
+                    <span className="ml-auto text-zinc-700 group-open:rotate-180 transition-transform">▾</span>
+                    {fillerWidths.length > 0 && (
+                      <span className="bg-amber-600/80 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">{fillerWidths.length}</span>
+                    )}
+                  </summary>
+                  <div className="mt-2 space-y-2 pt-2 border-t border-zinc-800/60">
+                    <div className="flex gap-2">
                       <input
                         type="number"
-                        placeholder="ex: 170"
+                        placeholder="Largura mm"
                         value={newFillerWidth}
                         onChange={(e) => setNewFillerWidth(e.target.value)}
-                        className="w-24 p-2 border border-amber-700/50 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
+                        className="w-28 p-2 border border-amber-700/50 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
                       />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-xs text-zinc-400 mb-1 block">Descrição (opcional)</label>
                       <input
                         type="text"
-                        placeholder="ex: Chapa A"
+                        placeholder="Descrição (opcional)"
                         value={newFillerDesc}
                         onChange={(e) => setNewFillerDesc(e.target.value)}
                         onKeyDown={(e) => {
@@ -1134,22 +923,16 @@ export default function AppPage() {
                           const w = parseFloat(newFillerWidth);
                           if (!w) return;
                           setFillerWidths((prev) => [...prev, { id: Date.now(), width: w, desc: newFillerDesc.trim() || `${w}mm` }]);
-                          setNewFillerWidth("");
-                          setNewFillerDesc("");
-                          setResults(null);
+                          setNewFillerWidth(""); setNewFillerDesc(""); setResults(null);
                         }}
-                        className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
+                        className="flex-1 p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
                       />
-                    </div>
-                    <div className="flex items-end">
                       <button
                         onClick={() => {
                           const w = parseFloat(newFillerWidth);
                           if (!w) return;
                           setFillerWidths((prev) => [...prev, { id: Date.now(), width: w, desc: newFillerDesc.trim() || `${w}mm` }]);
-                          setNewFillerWidth("");
-                          setNewFillerDesc("");
-                          setResults(null);
+                          setNewFillerWidth(""); setNewFillerDesc(""); setResults(null);
                         }}
                         disabled={!newFillerWidth}
                         className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-10 flex items-center justify-center"
@@ -1157,39 +940,53 @@ export default function AppPage() {
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
+                    {fillerWidths.length === 0 ? (
+                      <p className="text-zinc-600 text-xs text-center py-1">Nenhuma adicionada ainda.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {fillerWidths.map((fw) => (
+                          <div key={fw.id} className="flex items-center gap-1 bg-amber-950/30 border border-amber-800/50 rounded-lg px-2 py-1">
+                            <span className="text-amber-200 text-xs font-bold">{fw.width}mm</span>
+                            {fw.desc !== `${fw.width}mm` && <span className="text-amber-200/60 text-[10px]">{fw.desc}</span>}
+                            <button
+                              onClick={() => { setFillerWidths((prev) => prev.filter((f) => f.id !== fw.id)); setResults(null); }}
+                              className="text-red-400 hover:text-red-300 ml-1"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {fillerWidths.length === 0 ? (
-                    <p className="text-center text-zinc-600 text-xs py-2">Nenhuma largura complementar. O sistema usará só os pedidos acima.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {fillerWidths.map((fw) => (
-                        <div key={fw.id} className="flex items-center gap-1 bg-amber-950/30 border border-amber-800/50 rounded-lg px-2 py-1">
-                          <span className="text-amber-200 text-xs font-bold">{fw.width}mm</span>
-                          {fw.desc !== `${fw.width}mm` && <span className="text-amber-200/60 text-[10px]">{fw.desc}</span>}
-                          <button
-                            onClick={() => { setFillerWidths((prev) => prev.filter((f) => f.id !== fw.id)); setResults(null); }}
-                            className="text-red-400 hover:text-red-300 ml-1"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                </details>
               </div>
-            )}
 
-            {/* LOCAL PRESET (secondary) */}
-            <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800/60 p-3 text-xs">
-              <p className="text-zinc-500 mb-2 font-semibold uppercase tracking-wide">Preset local</p>
-              <div className="flex gap-2 flex-wrap">
-                <button onClick={loadDemoPlan} className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">Demo</button>
-                <button onClick={savePreset} className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">Salvar local</button>
-                {hasSavedPreset && <button onClick={loadPreset} className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition">Carregar local</button>}
-                <button onClick={clearAll} className="px-3 py-1.5 rounded-lg border border-red-900/40 text-red-400/60 hover:text-red-400 hover:bg-zinc-800 transition">Limpar</button>
+              {/* PASSO 3 — GERAR PLANO */}
+              <div className="px-4 pb-4 pt-3 bg-zinc-950/40 border-t border-zinc-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+                  <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wide">Gerar o plano de corte</span>
+                </div>
+                <button
+                  onClick={runCalculateOptimization}
+                  disabled={demands.length === 0 || isCalculating}
+                  className={`w-full py-3 rounded-xl font-bold text-lg shadow-md flex items-center justify-center gap-2 transition-all ${
+                    isCalculating ? "bg-zinc-800 text-zinc-400" : "bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white"
+                  }`}
+                >
+                  {isCalculating ? "Calculando..." : <><Calculator className="w-5 h-5" /> Gerar Plano</>}
+                </button>
               </div>
-              {presetStatus && <p className="mt-2 text-zinc-500">{presetStatus}</p>}
+            </div>
+
+            {/* Ações secundárias */}
+            <div className="flex items-center gap-4 px-1 text-xs text-zinc-600 flex-wrap">
+              <button onClick={loadDemoPlan} className="hover:text-zinc-400 transition">Carregar demo</button>
+              <button onClick={savePreset} className="hover:text-zinc-400 transition">Salvar configuração</button>
+              {hasSavedPreset && <button onClick={loadPreset} className="hover:text-zinc-400 transition">Restaurar</button>}
+              <button onClick={clearAll} className="hover:text-red-400 transition ml-auto">Limpar tudo</button>
+              {presetStatus && <span className="text-zinc-600 w-full">{presetStatus}</span>}
             </div>
 
           </div>
@@ -1197,34 +994,8 @@ export default function AppPage() {
           {/* RIGHT PANEL */}
           <div className="lg:col-span-8 space-y-5">
 
-            {/* SHEET SUGGESTIONS */}
-            {cutMode === "transversal" && sheetSuggestions.length > 0 && (
-              <div className="bg-amber-950/20 border border-amber-800/60 rounded-2xl p-5 shadow-sm animate-fade-in">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div>
-                    <h3 className="text-lg font-bold text-amber-200">Sugestoes para completar sobras</h3>
-                    <p className="text-xs text-amber-200/70">Itens do mesmo tipo/espessura para melhorar o aproveitamento.</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {sheetSuggestions.map((item, idx) => (
-                    <div key={`sheet-sug-${idx}`} className="bg-zinc-950/60 border border-amber-900/40 rounded-xl p-3 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-zinc-100">Chapa {item.sheetLabel} • {item.items && item.items.length > 1 ? "Combo" : "Sugestao"}</div>
-                        <div className="text-xs text-zinc-400">
-                          {item.items?.map((it) => <span key={`${it.code}-${it.width}-${it.height}`} className="mr-2">{it.code} {it.width}x{it.height} ({it.qty}x)</span>)}
-                        </div>
-                        <div className="text-xs text-zinc-400">Preenche {Math.round((item.fillRatio || 0) * 100)}% da sobra</div>
-                      </div>
-                      <button onClick={() => addSheetSuggestion(item)} className="px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-900">Adicionar</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* LONGITUDINAL SUGGESTIONS */}
-            {cutMode === "longitudinal" && suggestions.length > 0 && (
+            {suggestions.length > 0 && (
               <div className="bg-orange-950/30 border border-orange-800/60 rounded-2xl p-5 shadow-sm animate-fade-in">
                 <div className="flex items-start gap-4">
                   <div className="bg-orange-900/50 p-3 rounded-full"><Layers className="w-6 h-6 text-orange-300" /></div>
@@ -1281,7 +1052,7 @@ export default function AppPage() {
             )}
 
             {/* NO SUGGESTIONS */}
-            {cutMode === "longitudinal" && results && results.stats.efficiency < 97 && suggestions.length === 0 && (
+            {results && results.stats.efficiency < 97 && suggestions.length === 0 && (
               <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 text-center animate-fade-in">
                 <AlertCircle className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
                 <p className="text-zinc-200 font-medium">Nenhuma sugestão automática encontrada.</p>
@@ -1289,66 +1060,8 @@ export default function AppPage() {
               </div>
             )}
 
-            {/* SHEET RESULTS */}
-            {cutMode === "transversal" && sheetResults && (
-              <div className="animate-fade-in space-y-5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Aproveitamento</p>
-                    <p className="text-3xl font-bold text-emerald-300">{sheetResults.stats.efficiency}%</p>
-                  </div>
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Total Chapas</p>
-                    <p className="text-3xl font-bold text-zinc-50">{sheetResults.stats.totalSheets}</p>
-                  </div>
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Pecas</p>
-                    <p className="text-3xl font-bold text-zinc-50">{sheetResults.stats.totalPieces}</p>
-                  </div>
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Sobra</p>
-                    <p className="text-3xl font-bold text-orange-300">{sheetResults.stats.waste}%</p>
-                  </div>
-                </div>
-                {sheetAlert && <div className="bg-amber-950/30 border border-amber-800/60 rounded-xl px-4 py-3 text-amber-200 text-sm">{sheetAlert}</div>}
-                <div className="space-y-4">
-                  {sheetResults.sheets.map((sheet, idx) => (
-                    <div key={sheet.id} className="bg-zinc-900/60 rounded-2xl border border-zinc-800 overflow-hidden shadow-sm">
-                      <div className="bg-zinc-950 px-5 py-4 border-b border-zinc-800 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-amber-500 text-zinc-900 font-bold w-10 h-10 rounded-xl flex items-center justify-center text-lg">{idx + 1}</div>
-                          <div>
-                            <h4 className="font-bold text-zinc-50">Chapa {String.fromCharCode(65 + idx)}</h4>
-                            <div className="text-sm text-zinc-400">{sheetWidth} x {sheetHeight} mm</div>
-                          </div>
-                        </div>
-                        <div className="text-right text-xs text-zinc-400">Uso: {sheetArea ? Math.round((sheet.usedArea / sheetArea) * 100) : 0}%</div>
-                      </div>
-                      <div className="p-5">
-                        <div className="relative w-full border border-zinc-800 rounded-xl bg-zinc-950/40 overflow-hidden" style={{ aspectRatio: `${sheetWidth} / ${sheetHeight}` }}>
-                          {sheet.placements.map((piece, i) => {
-                            const left = (piece.x / sheetWidth) * 100;
-                            const top = (piece.y / sheetHeight) * 100;
-                            const w = (piece.width / sheetWidth) * 100;
-                            const h = (piece.height / sheetHeight) * 100;
-                            const showLabel = w > 12 && h > 12;
-                            return (
-                              <div key={`${sheet.id}-${i}`} className={`${COLORS[i % COLORS.length]} absolute border border-white/30 text-[10px] text-white flex items-center justify-center`}
-                                style={{ left: `${left}%`, top: `${top}%`, width: `${w}%`, height: `${h}%` }} title={piece.label}>
-                                {showLabel ? piece.label : ""}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* LONGITUDINAL RESULTS */}
-            {cutMode === "longitudinal" && results && (
+            {results && (
               <div className="animate-fade-in space-y-5">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
@@ -1658,16 +1371,10 @@ export default function AppPage() {
               </div>
             )}
 
-            {cutMode === "longitudinal" && !results && !isCalculating && (
+            {!results && !isCalculating && (
               <div className="h-full flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/40 rounded-2xl border border-dashed border-zinc-800 p-12">
                 <Scale className="w-16 h-16 mb-4 opacity-50" />
                 <p>Insira demandas para calcular.</p>
-              </div>
-            )}
-            {cutMode === "transversal" && !sheetResults && !isCalculating && (
-              <div className="h-full flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/40 rounded-2xl border border-dashed border-zinc-800 p-12">
-                <Scale className="w-16 h-16 mb-4 opacity-50" />
-                <p>Insira pecas para calcular.</p>
               </div>
             )}
           </div>
