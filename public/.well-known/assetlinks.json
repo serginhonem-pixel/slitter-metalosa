@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.betini.slitter",
+      "sha256_cert_fingerprints": [
+        "AF:5C:BA:E8:D5:B7:4C:2C:9B:F5:6E:AC:94:F0:62:9C:FF:3A:38:EE:7B:75:30:F9:1C:6A:25:B4:A7:33:90:4A"
+      ]
+    }
+  }
+]
