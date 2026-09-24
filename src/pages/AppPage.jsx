@@ -47,6 +47,7 @@ export default function AppPage() {
     if (cloudProducts.length > 0) return cloudProducts;
     return parseCSV(DEFAULT_CSV_DATA);
   }, [cloudProducts]);
+  const usingDemoCatalog = cloudProducts !== null && cloudProducts.length === 0;
 
   // ---- MACHINE STATE ----
   const [motherWidth, setMotherWidth] = useState(1200);
@@ -818,6 +819,16 @@ export default function AppPage() {
                 <div className="flex flex-col gap-3">
                   {demandInputMode === "catalog" ? (
                     <>
+                      {usingDemoCatalog && (
+                        <div className="callout-accent text-xs text-ink flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 shrink-0 text-accent-700" />
+                          <span>
+                            Você ainda não importou seu catálogo — os produtos abaixo são apenas um
+                            exemplo. Use <strong>Ver Catálogo</strong> ou <strong>Importar Planilha</strong> para
+                            trazer os seus.
+                          </span>
+                        </div>
+                      )}
                       <div className="w-full">
                         <label className="field-label">
                           Produto — {coilType} {Number(coilThickness).toFixed(2)}mm
