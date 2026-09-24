@@ -4,7 +4,7 @@ import brandSymbolSvg from "../assets/betini/betini-simbolo.svg?raw";
 import {
   Plus, Trash2, Calculator, Settings, Database,
   TrendingUp, Printer, AlertCircle, Box, Scale,
-  Layers, Ruler, AlertTriangle, Save, FileDown, History,
+  Layers, Ruler, AlertTriangle, Save, FileDown, History, Upload,
 } from "lucide-react";
 
 import { parseCSV, DEFAULT_CSV_DATA } from "../utils/parseCSV";
@@ -18,6 +18,7 @@ import { usePlans } from "../hooks/usePlans";
 import UserMenu from "../components/UserMenu";
 import CatalogManager from "../components/CatalogManager";
 import SavePlanModal from "../components/SavePlanModal";
+import ImportPlanModal from "../components/ImportPlanModal";
 import PlanHistory from "../components/PlanHistory";
 import StepRow from "../components/StepRow";
 import RawMaterialStrip from "../components/RawMaterialStrip";
@@ -79,6 +80,7 @@ export default function AppPage() {
 
   // ---- CLOUD UI STATE ----
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -191,6 +193,15 @@ export default function AppPage() {
     setResults(null);
     setSuggestions([]);
     setWeightAlert(null);
+  };
+
+  const handleImportPlan = (data) => {
+    if (data.coils.length > 0) {
+      setStockCoils((prev) => [...prev, ...data.coils]);
+    }
+    if (data.demands.length > 0) {
+      setDemands((prev) => [...prev, ...data.demands]);
+    }
   };
 
   const resetOutputs = () => {
@@ -566,6 +577,14 @@ export default function AppPage() {
               {cloudProducts && cloudProducts.length > 0 && (
                 <span className="w-1.5 h-1.5 rounded-full bg-accent ml-1" title="Catálogo da nuvem ativo" />
               )}
+            </button>
+
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="btn-quiet text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              Importar Planilha
             </button>
 
             <button
@@ -1352,6 +1371,14 @@ export default function AppPage() {
           defaultName={defaultPlanName()}
           onSave={handleSavePlan}
           onClose={() => setShowSaveModal(false)}
+        />
+      )}
+
+      {showImportModal && (
+        <ImportPlanModal
+          context={{ products: activeDb, coilType, coilThickness }}
+          onImport={handleImportPlan}
+          onClose={() => setShowImportModal(false)}
         />
       )}
 
