@@ -82,6 +82,44 @@ export function useProducts(companyId) {
     }
   };
 
+  /**
+   * Adds new products or updates existing ones by `code`, without touching
+   * products that aren't in `newProducts` (unlike uploadFromExcel, which replaces
+   * the whole catalog).
+   */
+  const upsertProducts = async (newProducts) => {
+    if (!companyId || !newProducts.length) return;
+
+    if (!FIREBASE_READY) {
+      const current = getLocalProducts(companyId);
+      const byCode = new Map(current.map((p) => [p.code, p]));
+      newProducts.forEach((p) => {
+        const existing = byCode.get(p.code);
+        byCode.set(p.code, { ...existing, ...p, id: existing?.id || `local-${Date.now()}-${p.code}` });
+      });
+      const merged = Array.from(byCode.values());
+      saveLocalProducts(companyId, merged);
+      setProducts(merged);
+      return;
+    }
+
+    try {
+      const colRef = collection(db, "companies", companyId, "products");
+      const existing = await getDocs(colRef);
+      const existingByCode = new Map(existing.docs.map((d) => [d.data().code, d.ref]));
+
+      const batch = writeBatch(db);
+      newProducts.forEach((p) => {
+        const ref = existingByCode.get(p.code) || doc(colRef);
+        batch.set(ref, { ...p, createdAt: serverTimestamp() }, { merge: true });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error(err);
+      setStatus("Erro ao importar catálogo.");
+    }
+  };
+
   const deleteProduct = async (productId) => {
     if (!companyId) return;
     if (!FIREBASE_READY) {
@@ -115,5 +153,5 @@ export function useProducts(companyId) {
     }
   };
 
-  return { products, status, setStatus, uploadFromExcel, deleteProduct, clearCatalog };
+  return { products, status, setStatus, uploadFromExcel, upsertProducts, deleteProduct, clearCatalog };
 }

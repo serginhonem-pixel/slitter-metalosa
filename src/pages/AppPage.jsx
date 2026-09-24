@@ -38,7 +38,7 @@ export default function AppPage() {
   const { userProfile } = useAuth();
   const companyId = userProfile?.companyId;
 
-  const { products: cloudProducts } = useProducts(companyId);
+  const { products: cloudProducts, upsertProducts } = useProducts(companyId);
   const { plans, savePlan, deletePlan } = usePlans(companyId);
 
   // ---- CLOUD CATALOG RESOLUTION ----
@@ -197,6 +197,9 @@ export default function AppPage() {
   };
 
   const handleImportPlan = (data) => {
+    if (data.catalogProducts.length > 0) {
+      upsertProducts(data.catalogProducts);
+    }
     if (data.coils.length > 0) {
       setStockCoils((prev) => [...prev, ...data.coils]);
     }

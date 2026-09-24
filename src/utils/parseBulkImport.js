@@ -100,21 +100,56 @@ export const parseOrderRows = (rows, { products = [], coilType = "", coilThickne
   return { demands, skipped };
 };
 
+export const parseCatalogRows = (rows) => {
+  const products = [];
+  const skipped = [];
+
+  rows.forEach((row) => {
+    const code = String(findValue(row, ["codigo", "cod", "code"])).trim();
+    const desc = String(findValue(row, ["descricao", "descricao produto", "descricao do produto"])).trim();
+    const type = String(findValue(row, ["tipo", "classe"])).trim();
+    const thickness = normalizeNumber(findValue(row, ["espessura", "thickness"]));
+    const width = normalizeNumber(findValue(row, ["largura", "width"]));
+    const history = normalizeNumber(
+      findValue(row, ["historico faturamento", "historico", "historico de faturamento", "hist_faturamento"])
+    );
+
+    if (!code || !desc || !Number.isFinite(width) || width <= 0 || !Number.isFinite(thickness)) {
+      skipped.push({ row, reason: "Informe código, descrição, espessura e largura válidos." });
+      return;
+    }
+
+    products.push({ code, desc, type, thickness, width, history: Number.isFinite(history) ? history : 0 });
+  });
+
+  return { products, skipped };
+};
+
 export const parseBulkImportWorkbook = (workbook, context, baseId = Date.now()) => {
+  const catalogoSheet = findSheet(workbook, ["catalogo"]);
   const estoqueSheet = findSheet(workbook, ["estoque"]);
   const pedidosSheet = findSheet(workbook, ["pedidos"]);
 
+  const catalogoRows = catalogoSheet ? XLSX.utils.sheet_to_json(catalogoSheet, { defval: "" }) : [];
   const estoqueRows = estoqueSheet ? XLSX.utils.sheet_to_json(estoqueSheet, { defval: "" }) : [];
   const pedidosRows = pedidosSheet ? XLSX.utils.sheet_to_json(pedidosSheet, { defval: "" }) : [];
 
+  const { products: catalogProducts, skipped: skippedCatalog } = parseCatalogRows(catalogoRows);
   const { coils, skipped: skippedStock } = parseStockRows(estoqueRows, baseId);
-  const { demands, skipped: skippedOrders } = parseOrderRows(pedidosRows, context, baseId);
+  const orderContext = { ...context, products: [...(context.products || []), ...catalogProducts] };
+  const { demands, skipped: skippedOrders } = parseOrderRows(pedidosRows, orderContext, baseId);
 
-  return { coils, demands, skippedStock, skippedOrders };
+  return { catalogProducts, coils, demands, skippedCatalog, skippedStock, skippedOrders };
 };
 
 export const buildImportTemplateWorkbook = () => {
   const workbook = XLSX.utils.book_new();
+
+  const catalogoSheet = XLSX.utils.aoa_to_sheet([
+    ["Codigo", "Descricao", "Tipo", "Espessura", "Largura"],
+    ["P1", "Perfil US 45X17X1,80", "BQ", 1.8, 45],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, catalogoSheet, "Catálogo");
 
   const estoqueSheet = XLSX.utils.aoa_to_sheet([["Peso (kg)"], [10000], [8500]]);
   XLSX.utils.book_append_sheet(workbook, estoqueSheet, "Estoque");

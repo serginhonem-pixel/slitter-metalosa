@@ -25,10 +25,11 @@ export default function ImportPlanModal({ context, onImport, onClose }) {
 
     onImport(data);
     setSummary({
+      catalog: data.catalogProducts.length,
       coils: data.coils.length,
       demands: data.demands.length,
-      skipped: data.skippedStock.length + data.skippedOrders.length,
-      skippedReasons: [...data.skippedStock, ...data.skippedOrders].map((s) => s.reason),
+      skipped: data.skippedCatalog.length + data.skippedStock.length + data.skippedOrders.length,
+      skippedReasons: [...data.skippedCatalog, ...data.skippedStock, ...data.skippedOrders].map((s) => s.reason),
     });
   };
 
@@ -46,8 +47,9 @@ export default function ImportPlanModal({ context, onImport, onClose }) {
         </div>
 
         <p className="text-sm text-ink-soft mb-4">
-          Suba uma planilha .xlsx com as abas <strong>Estoque</strong> e <strong>Pedidos</strong> para
-          preencher o plano de uma vez, sem digitar item por item.
+          Suba uma planilha .xlsx com as abas <strong>Catálogo</strong>, <strong>Estoque</strong> e{" "}
+          <strong>Pedidos</strong> para preencher o plano de uma vez, sem digitar item por item.
+          Catálogo entra somando ao que já existe (não apaga produtos antigos).
         </p>
 
         <button
@@ -84,7 +86,8 @@ export default function ImportPlanModal({ context, onImport, onClose }) {
           <div className="mt-4 p-3 bg-paper-2 border border-divider text-xs space-y-2">
             <div className="flex items-center gap-2 font-bold text-ink">
               <CheckCircle2 className="w-4 h-4 text-accent-700" />
-              {summary.demands} pedido(s) e {summary.coils} bobina(s) de estoque importados
+              {summary.catalog} produto(s) de catálogo, {summary.demands} pedido(s) e {summary.coils} bobina(s) de
+              estoque importados
             </div>
             {summary.skipped > 0 && (
               <div>
