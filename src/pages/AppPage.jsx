@@ -1315,21 +1315,21 @@ export default function AppPage() {
                   <span className="font-bold uppercase tracking-[0.16em] text-accent-700">Plano de corte</span>
                   <span className="text-ink-soft">{demands.length ? "Pronto para calcular" : "Aguardando pedidos"}</span>
                 </div>
-                <h2 id="empty-plan-title" className="mt-8 text-2xl md:text-3xl font-extrabold tracking-tight">{demands.length ? "Pedidos definidos. Gere o plano." : "Cada corte come?a na bobina."}</h2>
+                <h2 id="empty-plan-title" className="mt-8 text-2xl md:text-3xl font-extrabold tracking-tight">{demands.length ? "Pedidos definidos. Gere o plano." : "Cada corte começa na bobina."}</h2>
                 <p className="mt-3 max-w-lg text-sm text-ink-soft leading-relaxed">
-                  {demands.length ? "Use Gerar Plano para calcular os padr?es de corte, a efici?ncia e a sucata dos pedidos adicionados." : "Confira a bobina m?e e adicione os pedidos por peso ou quantidade. O plano mostrar? as larguras de corte e o refilo de cada padr?o."}
+                  {demands.length ? "Use Gerar Plano para calcular os padrões de corte, a eficiência e a sucata dos pedidos adicionados." : "Confira a bobina mãe e adicione os pedidos por peso ou quantidade. O plano mostrará as larguras de corte e o refilo de cada padrão."}
                 </p>
                 <div className="mt-8 flex flex-wrap justify-between gap-2 text-xs font-bold">
-                  <span>Bobina m?e ? {Number(motherWidth) || 0} mm</span>
-                  <span className="text-ink-soft">{coilType} ? {Number(coilThickness) || 0} mm</span>
+                  <span>Bobina mãe — {Number(motherWidth) || 0} mm</span>
+                  <span className="text-ink-soft">{coilType} — {Number(coilThickness) || 0} mm</span>
                 </div>
                 <div className="mt-3 flex h-24 border border-divider bg-paper-2 overflow-hidden" aria-label="Bobina sem plano calculado">
                   <div className="flex-1 flex items-center justify-center border-r border-divider text-ink-soft text-xs font-bold uppercase tracking-wider">Sem cortes definidos</div>
                   <div className="bg-repeating-linear-stripes border-l border-accent/40" style={{ width: Math.min(100, Math.max(0, Number(trim) / (Number(motherWidth) || 1) * 100)) + "%" }} />
                 </div>
                 <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs">
-                  <span className="font-bold">Largura ?til ? {Math.max(0, Number(motherWidth) - Number(trim)) || 0} mm</span>
-                  <span className="text-accent-700">Refilo ? {Number(trim) || 0} mm</span>
+                  <span className="font-bold">Largura útil — {Math.max(0, Number(motherWidth) - Number(trim)) || 0} mm</span>
+                  <span className="text-accent-700">Refilo — {Number(trim) || 0} mm</span>
                 </div>
                 <ol className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-divider pt-5 text-xs text-ink-soft">
                   <li><strong className="block text-accent-700 mb-1">01 / Bobina</strong>Confira material e estoque</li>
