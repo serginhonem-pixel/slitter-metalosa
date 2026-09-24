@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import logo2 from "../logo2.png";
+import logoHorizontal from "../assets/betini/betini-logotipo-horizontal.svg";
 
 export default function LoginPage() {
   const { login, register, loginWithGoogle } = useAuth();
@@ -77,55 +77,38 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{
-        fontFamily: "'Space Grotesk', 'Manrope', 'Segoe UI', sans-serif",
-        backgroundImage:
-          "radial-gradient(circle at top left, rgba(251, 191, 36, 0.16), transparent 55%), radial-gradient(circle at 80% 10%, rgba(59, 130, 246, 0.12), transparent 50%), linear-gradient(180deg, #0a0a0a 0%, #0c0c0c 100%)",
-      }}
-    >
+    <div className="min-h-screen bg-paper text-ink flex items-center justify-center p-4 font-sans">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-40 h-20 flex items-center justify-center overflow-hidden mb-3">
-            <img src={logo2} alt="SmartSlit" className="w-full h-full object-contain" />
+          <img src={logoHorizontal} alt="Betini Studio" className="h-12 object-contain mb-3" />
+          <div className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold mb-1">
+            Betini Studio · Slitter
           </div>
-          <div className="text-xs uppercase tracking-widest text-emerald-300 font-semibold mb-1">
-            SmartSlit
-          </div>
-          <h1 className="text-2xl font-semibold text-zinc-100">Planejamento de Corte</h1>
-          <p className="text-zinc-400 text-sm mt-1">Otimize cortes. Reduza sucata.</p>
+          <h1 className="text-2xl font-extrabold text-ink">Planejamento de Corte</h1>
+          <p className="text-ink-soft text-sm mt-1">Otimize cortes. Reduza sucata.</p>
         </div>
 
         {/* Card */}
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
+        <div className="panel p-6">
           {/* Tabs */}
-          <div className="flex gap-1 mb-6 bg-zinc-950 rounded-xl p-1">
+          <div className="segmented mb-6">
             <button
               onClick={() => { setTab("login"); setError(""); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                tab === "login"
-                  ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
+              className={`segmented-option ${tab === "login" ? "active" : ""}`}
             >
               Entrar
             </button>
             <button
               onClick={() => { setTab("register"); setError(""); }}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                tab === "register"
-                  ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
+              className={`segmented-option ${tab === "register" ? "active" : ""}`}
             >
               Cadastrar
             </button>
           </div>
 
           {error && (
-            <div className="mb-4 text-sm text-red-300 bg-red-950/30 border border-red-800/40 rounded-lg px-3 py-2">
+            <div className="mb-4 callout-accent text-sm text-ink">
               {error}
             </div>
           )}
@@ -133,7 +116,7 @@ export default function LoginPage() {
           {tab === "login" ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1 font-medium uppercase tracking-wide">
+                <label className="field-label">
                   E-mail
                 </label>
                 <input
@@ -141,12 +124,12 @@ export default function LoginPage() {
                   required
                   value={loginForm.email}
                   onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+                  className="field-input"
                   placeholder="voce@empresa.com"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1 font-medium uppercase tracking-wide">
+                <label className="field-label">
                   Senha
                 </label>
                 <input
@@ -154,14 +137,14 @@ export default function LoginPage() {
                   required
                   value={loginForm.password}
                   onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+                  className="field-input"
                   placeholder="••••••••"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                className="btn-primary w-full py-2.5"
               >
                 {loading ? "Entrando..." : "Entrar"}
               </button>
@@ -169,7 +152,7 @@ export default function LoginPage() {
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1 font-medium uppercase tracking-wide">
+                <label className="field-label">
                   Nome da Empresa
                 </label>
                 <input
@@ -177,24 +160,24 @@ export default function LoginPage() {
                   required
                   value={regForm.companyName}
                   onChange={(e) => setRegForm({ ...regForm, companyName: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+                  className="field-input"
                   placeholder="Metalúrgica Exemplo Ltda"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1 font-medium uppercase tracking-wide">
+                <label className="field-label">
                   Seu Nome
                 </label>
                 <input
                   type="text"
                   value={regForm.displayName}
                   onChange={(e) => setRegForm({ ...regForm, displayName: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+                  className="field-input"
                   placeholder="João Silva"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1 font-medium uppercase tracking-wide">
+                <label className="field-label">
                   E-mail
                 </label>
                 <input
@@ -202,12 +185,12 @@ export default function LoginPage() {
                   required
                   value={regForm.email}
                   onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+                  className="field-input"
                   placeholder="voce@empresa.com"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1 font-medium uppercase tracking-wide">
+                <label className="field-label">
                   Senha
                 </label>
                 <input
@@ -216,14 +199,14 @@ export default function LoginPage() {
                   minLength={6}
                   value={regForm.password}
                   onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
-                  className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+                  className="field-input"
                   placeholder="Mínimo 6 caracteres"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl transition disabled:opacity-50"
+                className="btn-primary w-full py-2.5"
               >
                 {loading ? "Cadastrando..." : "Criar conta"}
               </button>
@@ -232,17 +215,17 @@ export default function LoginPage() {
 
           <div className="relative my-4">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-zinc-800" />
+              <div className="w-full border-t border-divider" />
             </div>
-            <div className="relative flex justify-center text-xs text-zinc-500">
-              <span className="bg-zinc-900 px-2">ou continue com</span>
+            <div className="relative flex justify-center text-xs text-ink-faint">
+              <span className="bg-paper px-2">ou continue com</span>
             </div>
           </div>
 
           <button
             onClick={handleGoogle}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 border border-zinc-700 bg-zinc-950 hover:bg-zinc-800 text-zinc-200 font-medium py-2.5 rounded-xl transition text-sm disabled:opacity-50"
+            className="btn-quiet w-full py-2.5 text-sm"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -254,8 +237,8 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <p className="text-center text-zinc-600 text-xs mt-6">
-          SmartSlit © {new Date().getFullYear()} — Otimização Industrial de Corte
+        <p className="text-center text-ink-faint text-xs mt-6">
+          Betini Slitter © {new Date().getFullYear()} — Otimização Industrial de Corte
         </p>
       </div>
     </div>

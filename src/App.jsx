@@ -8,6 +8,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/__preview" element={<AppPage />} />
       <Route
         path="/*"
         element={

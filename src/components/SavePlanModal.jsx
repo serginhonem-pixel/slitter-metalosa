@@ -21,20 +21,20 @@ export default function SavePlanModal({ defaultName, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-paper border border-divider p-6 w-full max-w-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-zinc-100 flex items-center gap-2">
-            <Save className="w-4 h-4 text-emerald-400" />
+          <h3 className="font-bold text-ink flex items-center gap-2">
+            <Save className="w-4 h-4 text-accent-700" />
             Salvar Plano
           </h3>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition">
+          <button onClick={onClose} className="text-ink-faint hover:text-ink transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="mb-4">
-          <label className="block text-xs text-zinc-400 mb-1 uppercase tracking-wide font-medium">
+          <label className="field-label">
             Nome do plano
           </label>
           <input
@@ -43,12 +43,12 @@ export default function SavePlanModal({ defaultName, onSave, onClose }) {
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSave()}
             autoFocus
-            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500 transition"
+            className="field-input"
           />
         </div>
 
         {error && (
-          <div className="mb-4 text-xs text-red-300 bg-red-950/30 border border-red-800/40 rounded-lg px-3 py-2">
+          <div className="mb-4 callout-accent text-xs text-ink">
             {error}
           </div>
         )}
@@ -56,14 +56,14 @@ export default function SavePlanModal({ defaultName, onSave, onClose }) {
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 py-2 rounded-xl border border-zinc-700 text-sm text-zinc-400 hover:bg-zinc-800 transition"
+            className="btn-quiet flex-1 py-2 text-sm"
           >
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={saving || !name.trim()}
-            className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition disabled:opacity-50"
+            className="btn-primary flex-1 py-2 text-sm"
           >
             {saving ? "Salvando..." : "Salvar"}
           </button>

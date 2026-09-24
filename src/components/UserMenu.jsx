@@ -22,31 +22,31 @@ export default function UserMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition"
+        className="btn-quiet text-sm"
       >
-        <div className="w-6 h-6 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold">
+        <div className="w-6 h-6 rounded-full bg-ink text-paper flex items-center justify-center text-xs font-bold">
           {initials}
         </div>
-        <span className="hidden md:block max-w-[120px] truncate text-zinc-200">
+        <span className="hidden md:block max-w-[120px] truncate text-ink">
           {company}
         </span>
-        <ChevronDown className="w-3 h-3 text-zinc-500" />
+        <ChevronDown className="w-3 h-3 text-ink-faint" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl z-50 py-1">
-          <div className="px-3 py-2 border-b border-zinc-800">
-            <div className="flex items-center gap-2 text-zinc-300">
-              <Building2 className="w-4 h-4 text-zinc-500" />
+        <div className="absolute right-0 top-full mt-2 w-56 bg-paper border border-divider z-50 py-1">
+          <div className="px-3 py-2 border-b border-divider">
+            <div className="flex items-center gap-2 text-ink-soft">
+              <Building2 className="w-4 h-4 text-ink-faint" />
               <div>
-                <p className="text-xs font-semibold truncate">{company}</p>
-                <p className="text-[11px] text-zinc-500 truncate">{userProfile?.email}</p>
+                <p className="text-xs font-semibold truncate text-ink">{company}</p>
+                <p className="text-[11px] text-ink-faint truncate">{userProfile?.email}</p>
               </div>
             </div>
           </div>
           <button
             onClick={() => { setOpen(false); logout(); }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-zinc-800 transition rounded-b-xl"
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-accent-700 hover:bg-paper-2 transition"
           >
             <LogOut className="w-4 h-4" />
             Sair

@@ -146,6 +146,7 @@ export const generatePatternOptions = (usableWidth, allWidths, maxOptions = 10, 
 export const generateSuggestions = (
   patterns,
   usableWidth,
+  motherWidth,
   currentTotalUsefulWeight,
   currentTotalInputWeight,
   availableProducts
@@ -168,7 +169,7 @@ export const generateSuggestions = (
             return (
               acc +
               pattern.assignedCoils.reduce((cAcc, coil) => {
-                return cAcc + getStripWeight(item.width, usableWidth, coil.weight);
+                return cAcc + getStripWeight(item.width, motherWidth, coil.weight);
               }, 0)
             );
           }, 0);
@@ -179,7 +180,7 @@ export const generateSuggestions = (
           const itemsWithWeights = combData.combo.map((item) => ({
             ...item,
             weightToAdd: pattern.assignedCoils.reduce((cAcc, coil) => {
-              return cAcc + getStripWeight(item.width, usableWidth, coil.weight);
+              return cAcc + getStripWeight(item.width, motherWidth, coil.weight);
             }, 0),
           }));
 
@@ -210,15 +211,20 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
   const safeTrim = Number(trim) || 0;
   const usableWidth = Math.max(0, safeMotherWidth - safeTrim);
 
-  const isQtyMode = demands.some((d) => d.targetQty != null);
-
   let allItems = [];
   const demandAnalysis = {};
 
-  if (isQtyMode) {
-    demands.forEach((d) => {
+  const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
+  const avgCoilWeight = totalAvailableWeight / (stockCoils.length || 1);
+
+  demands.forEach((d, demandIdx) => {
+    const demandId = d.id ?? `demand-${demandIdx}`;
+    const isQtyDemand = d.targetQty != null;
+
+    if (isQtyDemand) {
       const qty = Number(d.targetQty) || 0;
-      demandAnalysis[d.width] = {
+      demandAnalysis[demandId] = {
+        width: d.width,
         reqQty: qty,
         producedQty: 0,
         producedWeight: 0,
@@ -226,27 +232,26 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
         isQtyMode: true,
       };
       for (let i = 0; i < qty; i++) {
-        allItems.push({ width: d.width, desc: d.desc, code: d.code });
+        allItems.push({ width: d.width, desc: d.desc, code: d.code, demandId });
       }
-    });
-  } else {
-    const totalAvailableWeight = stockCoils.reduce((acc, c) => acc + c.weight, 0);
-    const avgCoilWeight = totalAvailableWeight / (stockCoils.length || 1);
-    demands.forEach((d) => {
-      const estimatedStripWeight = getStripWeight(d.width, usableWidth, avgCoilWeight);
+    } else {
+      const estimatedStripWeight = getStripWeight(d.width, safeMotherWidth, avgCoilWeight);
       const safeStripWeight = estimatedStripWeight > 0 ? estimatedStripWeight : 1;
-      const qtyNeeded = Math.ceil(d.targetWeight / safeStripWeight);
-      demandAnalysis[d.width] = {
-        reqWeight: d.targetWeight,
+      const qtyNeeded = Math.ceil((d.targetWeight || 0) / safeStripWeight);
+      demandAnalysis[demandId] = {
+        width: d.width,
+        reqWeight: d.targetWeight || 0,
         producedQty: 0,
         producedWeight: 0,
         desc: d.desc,
       };
       for (let i = 0; i < qtyNeeded; i++) {
-        allItems.push({ width: d.width, desc: d.desc, code: d.code });
+        allItems.push({ width: d.width, desc: d.desc, code: d.code, demandId });
       }
-    });
-  }
+    }
+  });
+
+  const isQtyMode = demands.some((d) => d.targetQty != null);
 
   allItems.sort((a, b) => b.width - a.width);
 
@@ -321,10 +326,10 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
     const key = JSON.stringify(sortedItems.map((i) => i.width));
 
     sortedItems.forEach((item) => {
-      const realStripWeight = getStripWeight(item.width, usableWidth, coil.weight);
-      if (demandAnalysis[item.width]) {
-        demandAnalysis[item.width].producedQty++;
-        demandAnalysis[item.width].producedWeight += realStripWeight;
+      const realStripWeight = getStripWeight(item.width, safeMotherWidth, coil.weight);
+      if (item.demandId != null && demandAnalysis[item.demandId]) {
+        demandAnalysis[item.demandId].producedQty++;
+        demandAnalysis[item.demandId].producedWeight += realStripWeight;
       }
     });
 
@@ -359,7 +364,7 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
   patternsArray.forEach((p) => {
     const patternInputWeight = p.assignedCoils.reduce((acc, c) => acc + c.weight, 0);
     const patternUsefulWeight = p.assignedCoils.reduce((acc, c) => {
-      return acc + getStripWeight(p.usedWidth, usableWidth, c.weight);
+      return acc + getStripWeight(p.usedWidth, safeMotherWidth, c.weight);
     }, 0);
 
     p.scrapWeight = patternInputWeight - patternUsefulWeight;
@@ -377,7 +382,7 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
     allUsedCoils.forEach((coil) => {
       coil.items.forEach((item) => {
         if (item.isFiller && fillerAnalysis[item.width]) {
-          fillerAnalysis[item.width].producedWeight += getStripWeight(item.width, usableWidth, coil.weight);
+          fillerAnalysis[item.width].producedWeight += getStripWeight(item.width, safeMotherWidth, coil.weight);
         }
       });
     });
@@ -419,6 +424,7 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
       foundSuggestions = generateSuggestions(
         patternsArray,
         usableWidth,
+        safeMotherWidth,
         totalUseful,
         totalInputWeight,
         suggestionPool

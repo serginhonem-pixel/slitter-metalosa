@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
-import logo2 from "../logo2.png";
+import brandSymbol from "../assets/betini/betini-simbolo.svg";
+import brandSymbolSvg from "../assets/betini/betini-simbolo.svg?raw";
 import {
   Plus, Trash2, Calculator, Settings, Database,
   TrendingUp, Printer, AlertCircle, Box, Scale,
   Layers, Ruler, AlertTriangle, Save, FileDown, History,
 } from "lucide-react";
 
-import { parseCSV, DEFAULT_CSV_DATA, COLORS } from "../utils/parseCSV";
+import { parseCSV, DEFAULT_CSV_DATA } from "../utils/parseCSV";
 import { calculateOptimization } from "../utils/optimizationEngine";
 import { exportPlanToExcel } from "../utils/exportExcel";
 
@@ -18,6 +19,17 @@ import UserMenu from "../components/UserMenu";
 import CatalogManager from "../components/CatalogManager";
 import SavePlanModal from "../components/SavePlanModal";
 import PlanHistory from "../components/PlanHistory";
+import StepRow from "../components/StepRow";
+import RawMaterialStrip from "../components/RawMaterialStrip";
+
+const printBrandHeader = `<header class="print-brand">${brandSymbolSvg}<div><small>BETINI STUDIO / Slitter</small><strong>Betini Slitter</strong></div></header>`;
+const printBrandStyles = `<style>
+.print-brand{display:flex;align-items:center;gap:14px;border-top:4px solid #ec3013;padding-top:16px;margin-bottom:24px}
+.print-brand svg{width:56px;height:56px;flex-shrink:0}
+.print-brand small{display:block;font:700 10px Arial,sans-serif;letter-spacing:2px;color:#ae1800}
+.print-brand strong{display:block;font-size:26px;letter-spacing:-1px}
+@media print{.print-brand,th,[style*="background"]{print-color-adjust:exact;-webkit-print-color-adjust:exact}thead{display:table-header-group}.card{break-inside:avoid}}
+</style>`;
 
 const PRESET_STORAGE_KEY = "slitter-preset-v1";
 
@@ -288,7 +300,7 @@ export default function AppPage() {
       });
       setResults(res);
       setSuggestions(sug);
-      setSelectedPatternOption(null);
+      setSelectedPatternOption(res?.patternOptions?.length ? 0 : null);
       setIsCalculating(false);
     }, 600);
   };
@@ -299,7 +311,7 @@ export default function AppPage() {
     const win = window.open("", "_blank");
     if (!win) { alert("Permita pop-ups para imprimir."); return; }
 
-    const PRINT_COLORS = ["#3b82f6","#22c55e","#eab308","#a855f7","#ec4899","#f97316","#14b8a6","#ef4444","#8b5cf6","#06b6d4"];
+    const PRINT_COLORS = ["#201e1d", "#33302e", "#4a4542", "#5f5955", "#6e6763"];
 
     const cards = results.patternOptions.map((opt, idx) => {
       const entries = Object.entries(opt.counts);
@@ -312,31 +324,31 @@ export default function AppPage() {
         </div>`;
       }).join("");
       const wastePct = (opt.waste / mw * 100).toFixed(2);
-      const wasteBar = opt.waste > 0 ? `<div style="width:${wastePct}%;background:#fee2e2;height:100%;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#b91c1c;font-size:9px;font-weight:700;">${opt.waste}mm</span>
+      const wasteBar = opt.waste > 0 ? `<div style="width:${wastePct}%;background:#f3f2f2;height:100%;display:flex;align-items:center;justify-content:center;">
+        <span style="color:#ae1800;font-size:9px;font-weight:700;">${opt.waste}mm</span>
       </div>` : "";
 
       const pills = entries.map(([w, qty], i) =>
-        `<span style="display:inline-block;background:${PRINT_COLORS[i % PRINT_COLORS.length]};color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;margin:2px;">${qty}× ${w}mm</span>`
+        `<span style="display:inline-block;background:${PRINT_COLORS[i % PRINT_COLORS.length]};color:#fff;padding:3px 10px;border-radius:0;font-size:12px;font-weight:700;margin:2px;">${qty}× ${w}mm</span>`
       ).join(" ");
 
-      const effColor = Number(opt.efficiency) >= 97 ? "#16a34a" : Number(opt.efficiency) >= 90 ? "#d97706" : "#dc2626";
+      const effColor = Number(opt.efficiency) >= 97 ? "#201e1d" : Number(opt.efficiency) >= 90 ? "#ae1800" : "#ae1800";
 
-      return `<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:16px;overflow:hidden;page-break-inside:avoid;">
-        <div style="background:#f8fafc;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb;">
+      return `<div style="border:1px solid #d3d1d0;border-radius:0;margin-bottom:16px;overflow:hidden;page-break-inside:avoid;">
+        <div style="background:#f3f2f2;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d3d1d0;">
           <strong style="font-size:14px;">Opção ${idx + 1}</strong>
           <div style="display:flex;gap:12px;align-items:center;">
             <span style="color:${effColor};font-weight:800;font-size:15px;">${opt.efficiency}%</span>
-            <span style="color:#6b7280;font-size:12px;">Sobra: ${opt.waste}mm</span>
+            <span style="color:#5f5955;font-size:12px;">Sobra: ${opt.waste}mm</span>
           </div>
         </div>
         <div style="padding:12px;">
-          <div style="height:36px;width:100%;background:#e5e7eb;border-radius:6px;overflow:hidden;display:flex;margin-bottom:10px;">${bars}${wasteBar}</div>
+          <div style="height:36px;width:100%;background:#d3d1d0;border-radius:0;overflow:hidden;display:flex;margin-bottom:10px;">${bars}${wasteBar}</div>
           <div>${pills}</div>
           <table style="width:100%;margin-top:10px;font-size:11px;border-collapse:collapse;">
-            <thead><tr style="background:#f1f5f9;"><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Largura</th><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Qtd</th><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">Ocupação</th></tr></thead>
-            <tbody>${entries.map(([w, qty]) => `<tr><td style="padding:5px 8px;border-bottom:1px solid #f3f4f6;">${w}mm</td><td style="padding:5px 8px;border-bottom:1px solid #f3f4f6;">${qty}</td><td style="padding:5px 8px;border-bottom:1px solid #f3f4f6;">${(Number(w) * qty / mw * 100).toFixed(1)}%</td></tr>`).join("")}
-            <tr style="background:#fef2f2;"><td style="padding:5px 8px;font-weight:700;color:#b91c1c;">SUCATA</td><td style="padding:5px 8px;">—</td><td style="padding:5px 8px;font-weight:700;color:#b91c1c;">${opt.waste}mm (${(opt.waste/mw*100).toFixed(1)}%)</td></tr>
+            <thead><tr style="background:#eae9e9;"><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #d3d1d0;">Largura</th><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #d3d1d0;">Qtd</th><th style="padding:5px 8px;text-align:left;border-bottom:1px solid #d3d1d0;">Ocupação</th></tr></thead>
+            <tbody>${entries.map(([w, qty]) => `<tr><td style="padding:5px 8px;border-bottom:1px solid #eae9e9;">${w}mm</td><td style="padding:5px 8px;border-bottom:1px solid #eae9e9;">${qty}</td><td style="padding:5px 8px;border-bottom:1px solid #eae9e9;">${(Number(w) * qty / mw * 100).toFixed(1)}%</td></tr>`).join("")}
+            <tr style="background:#f3f2f2;"><td style="padding:5px 8px;font-weight:700;color:#ae1800;">SUCATA</td><td style="padding:5px 8px;">—</td><td style="padding:5px 8px;font-weight:700;color:#ae1800;">${opt.waste}mm (${(opt.waste/mw*100).toFixed(1)}%)</td></tr>
             </tbody>
           </table>
         </div>
@@ -347,16 +359,16 @@ export default function AppPage() {
       ? `Larguras complementares: ${fillerWidths.map(f => f.width + "mm").join(", ")}`
       : "";
 
-    win.document.write(`<html><head><title>SmartSlit | Variações de Corte</title>
+    win.document.write(`<html lang="pt-BR"><head><meta charset="UTF-8">${printBrandStyles}<title>Betini Slitter | Variações de Corte</title>
     <style>
-      body{font-family:system-ui,Arial;padding:32px;color:#111827;max-width:900px;margin:auto}
-      h1{font-size:20px;border-bottom:2px solid #111827;padding-bottom:8px;margin-bottom:6px}
-      .meta{font-size:12px;color:#6b7280;margin-bottom:20px}
-      .print-btn{position:fixed;bottom:18px;right:18px;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;text-decoration:none;cursor:pointer;border:none;font-size:14px;}
+      body{font-family:Archivo,Arial,sans-serif;padding:32px;color:#201e1d;max-width:900px;margin:auto}
+      h1{font-size:20px;border-bottom:2px solid #201e1d;padding-bottom:8px;margin-bottom:6px}
+      .meta{font-size:12px;color:#5f5955;margin-bottom:20px}
+      .print-btn{position:fixed;bottom:18px;right:18px;background:#ec3013;color:#fff;padding:10px 18px;border-radius:0;font-weight:700;text-decoration:none;cursor:pointer;border:none;font-size:14px;}
       @media print{.print-btn{display:none}body{padding:12px}}
     </style>
     </head><body>
-      <h1>SmartSlit — Variações de Padrão de Corte</h1>
+      <h1>Betini Slitter — Variações de Padrão de Corte</h1>
       <div class="meta">
         Data: ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp;
         Empresa: ${userProfile?.companyName || "—"} &nbsp;|&nbsp;
@@ -376,7 +388,7 @@ export default function AppPage() {
     const win = window.open("", "_blank");
     if (!win) { alert("Permita pop-ups para imprimir."); return; }
 
-    const PRINT_COLORS = ["#3b82f6","#22c55e","#eab308","#a855f7","#ec4899","#f97316","#14b8a6","#ef4444","#8b5cf6","#06b6d4"];
+    const PRINT_COLORS = ["#201e1d", "#33302e", "#4a4542", "#5f5955", "#6e6763"];
     const allWidthDescMap = {};
     demands.forEach((d) => { allWidthDescMap[d.width] = d.desc || `${d.width}mm`; });
     fillerWidths.forEach((fw) => { allWidthDescMap[fw.width] = fw.desc || `${fw.width}mm`; });
@@ -401,31 +413,31 @@ export default function AppPage() {
       </div>`;
     }).join("");
     const wastePct = (opt.waste / mw * 100).toFixed(2);
-    const wasteBar = opt.waste > 0 ? `<div style="width:${wastePct}%;background:#fee2e2;height:100%;display:flex;align-items:center;justify-content:center;"><span style="color:#b91c1c;font-size:10px;font-weight:700;">${opt.waste}mm</span></div>` : "";
+    const wasteBar = opt.waste > 0 ? `<div style="width:${wastePct}%;background:#f3f2f2;height:100%;display:flex;align-items:center;justify-content:center;"><span style="color:#ae1800;font-size:10px;font-weight:700;">${opt.waste}mm</span></div>` : "";
 
     const avgCWp = stockCoils.length > 0 ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length : 10000;
-    const usableWp = Math.max(1, Number(motherWidth) - (Number(trim) || 0));
-    const estWp = (w) => Math.round((Number(w) / usableWp) * avgCWp);
+    const grossWp = Math.max(1, Number(motherWidth));
+    const estWp = (w) => Math.round((Number(w) / grossWp) * avgCWp);
     const rows = coords.map((c, i) =>
-      `<tr><td>${i+1}</td><td style="color:#2563eb;font-weight:600;">${c.start}mm</td><td style="font-weight:800;font-size:14px;">${c.width}mm</td><td>${c.end}mm</td><td>${c.desc}</td><td style="color:#16a34a;font-weight:600;">~${estWp(c.width).toLocaleString()} kg</td></tr>`
+      `<tr><td>${i+1}</td><td style="color:#201e1d;font-weight:600;">${c.start}mm</td><td style="font-weight:800;font-size:14px;">${c.width}mm</td><td>${c.end}mm</td><td>${c.desc}</td><td style="color:#201e1d;font-weight:600;">~${estWp(c.width).toLocaleString()} kg</td></tr>`
     ).join("");
     const scrapRow = opt.waste > 0
-      ? `<tr style="background:#fef2f2;color:#b91c1c;font-weight:700;"><td>Ref</td><td>${pos}mm</td><td>${opt.waste}mm</td><td>${mw}mm</td><td>SUCATA / SOBRA</td><td>~${estWp(opt.waste).toLocaleString()} kg</td></tr>`
+      ? `<tr style="background:#f3f2f2;color:#ae1800;font-weight:700;"><td>Ref</td><td>${pos}mm</td><td>${opt.waste}mm</td><td>${mw}mm</td><td>SUCATA / SOBRA</td><td>~${estWp(opt.waste).toLocaleString()} kg</td></tr>`
       : "";
 
-    const effColor = Number(opt.efficiency) >= 97 ? "#16a34a" : Number(opt.efficiency) >= 90 ? "#d97706" : "#dc2626";
-    win.document.write(`<html><head><title>SmartSlit | Opção ${idx+1}</title>
+    const effColor = Number(opt.efficiency) >= 97 ? "#201e1d" : Number(opt.efficiency) >= 90 ? "#ae1800" : "#ae1800";
+    win.document.write(`<html lang="pt-BR"><head><meta charset="UTF-8">${printBrandStyles}<title>Betini Slitter | Opção ${idx+1}</title>
     <style>
-      body{font-family:system-ui,Arial;padding:32px;color:#111827;max-width:800px;margin:auto}
-      h1{font-size:20px;border-bottom:2px solid #111827;padding-bottom:8px;margin-bottom:6px}
-      .meta{font-size:12px;color:#6b7280;margin-bottom:20px}
+      body{font-family:Archivo,Arial,sans-serif;padding:32px;color:#201e1d;max-width:800px;margin:auto}
+      h1{font-size:20px;border-bottom:2px solid #201e1d;padding-bottom:8px;margin-bottom:6px}
+      .meta{font-size:12px;color:#5f5955;margin-bottom:20px}
       table{width:100%;border-collapse:collapse;font-size:13px;margin-top:16px}
-      th,td{padding:9px 10px;border-bottom:1px solid #e5e7eb;text-align:left}
-      th{background:#f1f5f9;font-size:11px;text-transform:uppercase;color:#6b7280}
-      .print-btn{position:fixed;bottom:18px;right:18px;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;cursor:pointer;border:none;font-size:14px;}
+      th,td{padding:9px 10px;border-bottom:1px solid #d3d1d0;text-align:left}
+      th{background:#eae9e9;font-size:11px;text-transform:uppercase;color:#5f5955}
+      .print-btn{position:fixed;bottom:18px;right:18px;background:#ec3013;color:#fff;padding:10px 18px;border-radius:0;font-weight:700;cursor:pointer;border:none;font-size:14px;}
       @media print{.print-btn{display:none}body{padding:12px}}
     </style></head><body>
-      <h1>SmartSlit — Padrão de Corte · Opção ${idx+1}</h1>
+      <h1>Betini Slitter — Padrão de Corte · Opção ${idx+1}</h1>
       <div class="meta">
         Data: ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp;
         Empresa: ${userProfile?.companyName || "—"} &nbsp;|&nbsp;
@@ -435,9 +447,9 @@ export default function AppPage() {
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <strong style="font-size:16px;">Eficiência: <span style="color:${effColor}">${opt.efficiency}%</span></strong>
-        <span style="color:#6b7280;font-size:13px;">Sucata: ${opt.waste}mm</span>
+        <span style="color:#5f5955;font-size:13px;">Sucata: ${opt.waste}mm</span>
       </div>
-      <div style="height:44px;width:100%;background:#e5e7eb;border-radius:8px;overflow:hidden;display:flex;margin-bottom:20px;">${bars}${wasteBar}</div>
+      <div style="height:44px;width:100%;background:#d3d1d0;border-radius:0;overflow:hidden;display:flex;margin-bottom:20px;">${bars}${wasteBar}</div>
       <table>
         <thead><tr><th>#</th><th>Início</th><th>Corte</th><th>Fim</th><th>Produto</th><th>Peso est.</th></tr></thead>
         <tbody>${rows}${scrapRow}</tbody>
@@ -447,28 +459,28 @@ export default function AppPage() {
     win.document.close();
   };
 
-  // ---- PDF REPORT (unchanged) ----
+  // ---- PDF REPORT ----
   const generateReport = () => {
     if (!results) return;
     const reportWindow = window.open("", "_blank");
     if (!reportWindow) { alert("Permita pop-ups para gerar o relatório."); return; }
 
     const styles = `<style>
-      body{font-family:system-ui,Arial;padding:40px;color:#111827}
-      h1{font-size:22px;border-bottom:2px solid #111827;padding-bottom:8px;margin-bottom:18px}
-      .header-info{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;background:#f8fafc;padding:12px;border-radius:8px}
-      .header-item{font-size:13px}.header-item strong{display:block;font-size:10px;color:#6b7280;text-transform:uppercase}
-      .card{border:1px solid #e5e7eb;border-radius:8px;margin-bottom:18px;overflow:hidden}
-      .card-header{background:#f1f5f9;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e5e7eb}
+      body{font-family:Archivo,Arial,sans-serif;padding:40px;color:#201e1d}
+      h1{font-size:22px;border-bottom:2px solid #201e1d;padding-bottom:8px;margin-bottom:18px}
+      .header-info{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px;background:#f3f2f2;padding:12px;border-radius:0}
+      .header-item{font-size:13px}.header-item strong{display:block;font-size:10px;color:#5f5955;text-transform:uppercase}
+      .card{border:1px solid #d3d1d0;border-radius:0;margin-bottom:18px;overflow:hidden}
+      .card-header{background:#eae9e9;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d3d1d0}
       .pattern-title{font-weight:700;font-size:15px}
       table{width:100%;border-collapse:collapse;font-size:12px}
-      th,td{padding:8px;border-bottom:1px solid #e5e7eb}
-      .scrap-row{color:#b91c1c;font-weight:700;background:#fef2f2}
-      .total-summary{margin-top:28px;border-top:2px solid #111827;padding-top:14px;display:flex;gap:16px}
+      th,td{padding:8px;border-bottom:1px solid #d3d1d0}
+      .scrap-row{color:#ae1800;font-weight:700;background:#f3f2f2}
+      .total-summary{margin-top:28px;border-top:2px solid #201e1d;padding-top:14px;display:flex;gap:16px}
       .summary-box{text-align:center;min-width:120px}
       .summary-val{font-size:20px;font-weight:800}
-      .summary-label{font-size:11px;color:#6b7280;text-transform:uppercase}
-      .print-btn{position:fixed;bottom:18px;right:18px;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;font-weight:700;text-decoration:none}
+      .summary-label{font-size:11px;color:#5f5955;text-transform:uppercase}
+      .print-btn{position:fixed;bottom:18px;right:18px;background:#ec3013;color:#fff;padding:10px 18px;border-radius:0;font-weight:700;text-decoration:none}
       @media print{.print-btn{display:none}body{padding:0}}
     </style>`;
 
@@ -493,9 +505,9 @@ export default function AppPage() {
       cards += `<div class="card"><div class="card-header"><div><span class="pattern-title">Padrão ${String.fromCharCode(65+idx)}</span><span> - ${pattern.count} bobina(s) [${pattern.assignedCoils.map(c=>c.weight+"kg").join(", ")}]</span></div><div><strong>Efic: ${pEff}%</strong></div></div><div style="padding:12px"><table><thead><tr><th>#</th><th>Início</th><th>Largura</th><th>Fim</th><th>Produto</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
     });
 
-    const summary = `<div class="total-summary"><div class="summary-box"><div class="summary-label">Total Bobinas</div><div class="summary-val">${results.stats.totalCoils}</div></div><div class="summary-box"><div class="summary-label">Eficiência</div><div class="summary-val">${results.stats.efficiency}%</div></div><div class="summary-box"><div class="summary-label" style="color:#b91c1c">Sucata</div><div class="summary-val" style="color:#b91c1c">${results.stats.totalScrapWeight}kg</div></div></div>`;
+    const summary = `<div class="total-summary"><div class="summary-box"><div class="summary-label">Total Bobinas</div><div class="summary-val">${results.stats.totalCoils}</div></div><div class="summary-box"><div class="summary-label">Eficiência</div><div class="summary-val">${results.stats.efficiency}%</div></div><div class="summary-box"><div class="summary-label" style="color:#ae1800">Sucata</div><div class="summary-val" style="color:#ae1800">${results.stats.totalScrapWeight}kg</div></div></div>`;
 
-    reportWindow.document.write(`<html><head><title>SmartSlit | Ordem de Producao</title>${styles}</head><body><h1>SmartSlit - Ordem de Producao</h1>${header}${cards}${summary}<a href="#" onclick="window.print();return false;" class="print-btn">🖨️ Imprimir / Salvar PDF</a></body></html>`);
+    reportWindow.document.write(`<html lang="pt-BR"><head><meta charset="UTF-8">${printBrandStyles}<title>Betini Slitter | Ordem de Produ??o</title>${styles}</head><body>${printBrandHeader}<h1>Ordem de Produ??o</h1>${header}${cards}${summary}<a href="#" onclick="window.print();return false;" class="print-btn">🖨️ Imprimir / Salvar PDF</a></body></html>`);
     reportWindow.document.close();
   };
 
@@ -529,57 +541,41 @@ export default function AppPage() {
   };
 
   return (
-    <div
-      className="min-h-screen text-zinc-100 p-3 md:p-5 font-sans relative overflow-hidden"
-      style={{
-        fontFamily: "'Space Grotesk','Manrope','Segoe UI',sans-serif",
-        backgroundImage:
-          "radial-gradient(circle at top left,rgba(251,191,36,.16),transparent 55%),radial-gradient(circle at 20% 30%,rgba(16,185,129,.12),transparent 45%),radial-gradient(circle at 80% 10%,rgba(59,130,246,.12),transparent 50%),linear-gradient(180deg,#0a0a0a 0%,#0c0c0c 35%,#090909 100%)",
-      }}
-    >
-      <div className="pointer-events-none absolute -top-32 right-0 w-[420px] h-[420px] bg-amber-500/20 blur-[120px] rounded-full" />
-      <div className="pointer-events-none absolute -bottom-40 left-0 w-[520px] h-[520px] bg-emerald-500/10 blur-[140px] rounded-full" />
-
-      <div className="max-w-7xl mx-auto space-y-5 relative">
+    <div className="min-h-screen bg-paper text-ink p-3 md:p-5 font-sans">
+      <div className="max-w-7xl mx-auto space-y-5">
 
         {/* HEADER */}
-        <header className="sticky top-0 z-20 rounded-2xl bg-zinc-950/80 backdrop-blur border border-zinc-800 px-4 py-4 md:px-6 md:py-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shadow-sm">
+        <header className="sticky top-0 z-20 -mx-3 md:-mx-5 bg-paper/95 backdrop-blur border-t-4 border-t-accent border-b border-b-divider">
+        <div className="px-4 py-4 md:px-6 md:py-5 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
           <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-32 h-16 md:w-44 md:h-24 flex items-center justify-center overflow-hidden">
-              <img src={logo2} alt="SmartSlit" className="w-full h-full object-contain" />
-            </div>
+            <img src={brandSymbol} alt="" className="w-14 h-14 md:w-16 md:h-16 shrink-0" />
             <div>
-              <div className="text-[10px] md:text-[12px] uppercase tracking-[0.24em] text-emerald-300 font-semibold">SmartSlit</div>
-              <h1 className="text-xl md:text-[28px] font-semibold tracking-tight flex items-center gap-2">
-                Planejamento de Corte
-                <span className="text-[10px] md:text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/40 text-emerald-200 bg-emerald-950/40">Industrial</span>
-              </h1>
-              <p className="text-zinc-400 mt-1 text-xs md:text-[13px] max-w-[520px]">
-                Otimize bobinas, reduza sucata e gere ordens de producao prontas para o chao de fabrica.
-              </p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent-700">Betini Studio / Slitter</p>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Betini Slitter</h1>
+              <p className="text-ink-soft mt-1 text-xs md:text-sm">Planejamento de corte longitudinal</p>
             </div>
           </div>
 
-          <div className="flex w-full md:w-auto gap-2 flex-wrap">
+          <div className="flex w-full xl:w-auto gap-2 flex-wrap">
             <button
               onClick={() => setShowDb(!showDb)}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition"
+              className="btn-quiet text-sm"
             >
               <Database className="w-4 h-4" />
               {showDb ? "Ocultar Catálogo" : "Ver Catálogo"}
               {cloudProducts && cloudProducts.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 ml-1" title="Catálogo da nuvem ativo" />
+                <span className="w-1.5 h-1.5 rounded-full bg-accent ml-1" title="Catálogo da nuvem ativo" />
               )}
             </button>
 
             <button
               onClick={() => setShowHistory(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium hover:bg-zinc-800 transition"
+              className="btn-quiet text-sm"
             >
               <History className="w-4 h-4" />
               Histórico
               {plans.length > 0 && (
-                <span className="text-xs bg-zinc-700 text-zinc-300 px-1.5 py-0.5 rounded-full">{plans.length}</span>
+                <span className="text-xs bg-paper-2 text-ink-soft border border-divider px-1.5 py-0.5 rounded-full">{plans.length}</span>
               )}
             </button>
 
@@ -587,21 +583,21 @@ export default function AppPage() {
               <>
                 <button
                   onClick={() => setShowSaveModal(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition shadow-sm"
+                  className="btn-primary text-sm"
                 >
                   <Save className="w-4 h-4" />
                   Salvar Plano
                 </button>
                 <button
                   onClick={() => exportPlanToExcel(results, { motherWidth, trim, coilThickness, coilType, stockCoils }, userProfile?.companyName)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-2 text-sm font-semibold text-zinc-200 transition"
+                  className="btn-quiet text-sm"
                 >
                   <FileDown className="w-4 h-4" />
                   Excel
                 </button>
                 <button
                   onClick={generateReport}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition shadow-sm"
+                  className="btn-quiet text-sm"
                 >
                   <Printer className="w-4 h-4" />
                   PDF
@@ -611,33 +607,56 @@ export default function AppPage() {
 
             <UserMenu />
           </div>
+        </div>
+
+        {/* INSTRUMENT STRIP — dense readouts, always visible */}
+        <div className="px-4 md:px-6 py-2.5 border-t border-divider flex items-center gap-6 md:gap-10 overflow-x-auto">
+          <div className="flex items-baseline gap-2 flex-none">
+            <span className="text-[10px] text-ink-faint uppercase tracking-wide font-bold">Eficiência</span>
+            <span className={`text-lg font-extrabold tabular-nums ${results ? (results.stats.efficiency >= 97 ? "text-ink" : "text-accent-700") : "text-ink-faint"}`}>
+              {results ? `${results.stats.efficiency}%` : "—"}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2 flex-none">
+            <span className="text-[10px] text-ink-faint uppercase tracking-wide font-bold">Sucata</span>
+            <span className="text-lg font-extrabold tabular-nums text-ink">
+              {results ? `${results.stats.totalScrapWeight}kg` : "—"}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2 flex-none">
+            <span className="text-[10px] text-ink-faint uppercase tracking-wide font-bold">Bobinas</span>
+            <span className="text-lg font-extrabold tabular-nums text-ink">
+              {results ? results.stats.totalCoils : "—"}
+            </span>
+          </div>
+        </div>
         </header>
 
         {/* SAVE STATUS TOAST */}
         {saveStatus && (
-          <div className="bg-emerald-950/30 border border-emerald-700/50 px-4 py-2 rounded-xl text-emerald-200 text-sm text-center animate-fade-in">
+          <div className="callout-ink text-ink text-sm text-center animate-fade-in">
             {saveStatus}
           </div>
         )}
 
         {/* MIGRATION BANNER */}
         {showMigrationBanner && (
-          <div className="bg-blue-950/30 border border-blue-700/50 p-4 rounded-xl flex items-start justify-between gap-3">
+          <div className="callout-ink flex items-start justify-between gap-3">
             <div>
-              <p className="text-blue-200 text-sm font-medium">
+              <p className="text-ink text-sm font-medium">
                 Encontramos um preset salvo localmente. Deseja importar suas configurações?
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => { loadPreset(); setShowMigrationBanner(false); }}
-                className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-semibold"
+                className="btn-ink text-xs py-1.5"
               >
                 Importar
               </button>
               <button
                 onClick={() => { localStorage.removeItem(PRESET_STORAGE_KEY); setShowMigrationBanner(false); }}
-                className="text-xs border border-zinc-700 text-zinc-400 hover:text-zinc-200 px-3 py-1.5 rounded-lg"
+                className="btn-quiet text-xs py-1.5"
               >
                 Ignorar
               </button>
@@ -647,12 +666,12 @@ export default function AppPage() {
 
         {/* WEIGHT ALERT */}
         {weightAlert && (
-          <div className="bg-yellow-950/30 border border-yellow-700/50 p-4 rounded-xl shadow-sm animate-fade-in flex items-start gap-3">
-            <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0 mt-1" />
+          <div className="callout-accent flex items-start gap-3 animate-fade-in">
+            <AlertTriangle className="w-6 h-6 text-accent-700 flex-shrink-0 mt-1" />
             <div>
-              <h3 className="font-bold text-yellow-200 text-lg">Demanda excede estoque</h3>
-              <p className="text-yellow-100 font-medium">{weightAlert.msg}</p>
-              <p className="text-yellow-200/80 text-sm mt-1">{weightAlert.subMsg}</p>
+              <h3 className="font-bold text-ink text-lg">Demanda excede estoque</h3>
+              <p className="text-ink font-medium">{weightAlert.msg}</p>
+              <p className="text-ink-soft text-sm mt-1">{weightAlert.subMsg}</p>
             </div>
           </div>
         )}
@@ -668,108 +687,108 @@ export default function AppPage() {
           <div className="lg:col-span-4 space-y-4">
 
             {/* PASSO 1 — MÁQUINA */}
-            <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
-              <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">1</span>
-                <Settings className="w-4 h-4 text-zinc-400" />
-                <h2 className="font-semibold text-zinc-200">Configuração da Máquina</h2>
+            <div className="panel">
+              <div className="panel-head">
+                <span className="step-badge">1</span>
+                <Settings className="w-4 h-4 text-ink-soft" />
+                <h2 className="font-semibold text-ink">Configuração da Máquina</h2>
               </div>
 
               <div className="p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Largura (mm)</label>
-                    <input type="number" value={motherWidth} onChange={(e) => setMotherWidth(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-lg" />
+                    <label className="field-label">Largura (mm)</label>
+                    <input type="number" value={motherWidth} onChange={(e) => setMotherWidth(e.target.value === "" ? "" : parseFloat(e.target.value))} className="field-input font-mono text-lg" />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Refilo (mm)</label>
-                    <input type="number" value={trim} onChange={(e) => setTrim(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <label className="field-label">Refilo (mm)</label>
+                    <input type="number" value={trim} onChange={(e) => setTrim(e.target.value === "" ? "" : parseFloat(e.target.value))} className="field-input" />
                   </div>
                 </div>
 
-                <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-800">
+                <div className="bg-paper-2 p-3 border border-divider">
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-xs font-bold text-zinc-400 uppercase">Estoque de Bobinas (kg)</label>
-                    <button onClick={addStockCoil} className="text-blue-400 hover:text-blue-300 text-xs font-bold flex items-center gap-1">
+                    <label className="field-label mb-0">Estoque de Bobinas (kg)</label>
+                    <button onClick={addStockCoil} className="text-accent-700 hover:text-accent text-xs font-bold flex items-center gap-1">
                       <Plus className="w-3 h-3" /> Add Bobina
                     </button>
                   </div>
                   <div className="max-h-[120px] overflow-y-auto space-y-2">
                     {stockCoils.map((coil, idx) => (
                       <div key={coil.id} className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500 font-mono w-4">{idx + 1}.</span>
+                        <span className="text-xs text-ink-faint font-mono w-4">{idx + 1}.</span>
                         <div className="relative flex-1">
-                          <input type="number" value={coil.weight} onChange={(e) => updateStockCoil(coil.id, e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 text-sm pr-8" />
-                          <span className="absolute right-2 top-2 text-xs text-zinc-500">kg</span>
+                          <input type="number" value={coil.weight} onChange={(e) => updateStockCoil(coil.id, e.target.value)} className="field-input text-sm pr-8" />
+                          <span className="absolute right-2 top-2 text-xs text-ink-faint">kg</span>
                         </div>
-                        <button onClick={() => removeStockCoil(coil.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => removeStockCoil(coil.id)} className="text-accent-700 hover:text-accent p-1"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 text-right text-xs text-zinc-400 font-bold">Total: {totalStockWeight.toLocaleString()} kg</div>
+                  <div className="mt-2 text-right text-xs text-ink-soft font-bold">Total: {totalStockWeight.toLocaleString()} kg</div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-1">Tipo Material</label>
+                    <label className="field-label">Tipo Material</label>
                     <input
                       list="material-types-list"
                       value={coilType}
                       onChange={(e) => setCoilType(e.target.value.toUpperCase())}
                       placeholder="ex: BQ, BZ..."
-                      className="w-full p-2 border border-zinc-700 rounded-lg bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                      className="field-input font-bold"
                     />
                     <datalist id="material-types-list">
                       {availableTypes.map((t) => <option key={t} value={t} />)}
                     </datalist>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-yellow-300 uppercase mb-1">Espessura (mm)</label>
-                    <input type="number" step="0.01" value={coilThickness} onChange={(e) => setCoilThickness(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-full p-2 border border-yellow-700/60 rounded-lg bg-yellow-950/30 text-yellow-50 focus:ring-2 focus:ring-yellow-500 outline-none font-bold" />
+                    <label className="field-label">Espessura (mm)</label>
+                    <input type="number" step="0.01" value={coilThickness} onChange={(e) => setCoilThickness(e.target.value === "" ? "" : parseFloat(e.target.value))} className="field-input font-bold" />
                   </div>
                 </div>
 
-                <div className="bg-blue-950/40 p-2 rounded-lg text-xs text-blue-200 text-center border border-blue-900/50">
+                <div className="callout-ink text-xs text-ink text-center">
                   Largura útil: <strong>{(Number(motherWidth) || 0) - (Number(trim) || 0)} mm</strong>
                 </div>
               </div>
             </div>
 
             {/* PASSO 2 — PEDIDOS */}
-            <div className="rounded-2xl bg-zinc-900/60 border border-zinc-800 overflow-hidden">
-              <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">2</span>
-                <Box className="w-4 h-4 text-zinc-400" />
-                <h2 className="font-semibold text-zinc-200">Pedidos</h2>
+            <div className="panel">
+              <div className="panel-head">
+                <span className="step-badge">2</span>
+                <Box className="w-4 h-4 text-ink-soft" />
+                <h2 className="font-semibold text-ink">Pedidos</h2>
               </div>
 
               <div className="p-4 space-y-3">
                 {/* Toggles numa linha só */}
                 <div className="flex gap-2">
-                  <div className="flex gap-1 flex-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800">
+                  <div className="segmented flex-1">
                     <button
                       onClick={() => setDemandInputMode("catalog")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "catalog" ? "bg-blue-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                      className={`segmented-option ${demandInputMode === "catalog" ? "active" : ""}`}
                     >
                       Catálogo
                     </button>
                     <button
                       onClick={() => setDemandInputMode("manual")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandInputMode === "manual" ? "bg-violet-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
+                      className={`segmented-option ${demandInputMode === "manual" ? "active" : ""}`}
                     >
                       Manual
                     </button>
                   </div>
-                  <div className="flex gap-1 flex-1 bg-zinc-950/40 p-1 rounded-xl border border-zinc-800/60">
+                  <div className="segmented flex-1">
                     <button
                       onClick={() => setDemandWeightMode("kg")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandWeightMode === "kg" ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+                      className={`segmented-option ${demandWeightMode === "kg" ? "active" : ""}`}
                     >
                       Por Kg
                     </button>
                     <button
                       onClick={() => setDemandWeightMode("qty")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition ${demandWeightMode === "qty" ? "bg-amber-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+                      className={`segmented-option ${demandWeightMode === "qty" ? "active" : ""}`}
                     >
                       Por Qtd
                     </button>
@@ -781,10 +800,10 @@ export default function AppPage() {
                   {demandInputMode === "catalog" ? (
                     <>
                       <div className="w-full">
-                        <label className="text-xs text-zinc-400 mb-1 block">
+                        <label className="field-label">
                           Produto — {coilType} {Number(coilThickness).toFixed(2)}mm
                         </label>
-                        <select value={selectedProductCode} onChange={(e) => setSelectedProductCode(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <select value={selectedProductCode} onChange={(e) => setSelectedProductCode(e.target.value)} className="field-input text-sm">
                           <option value="">Selecione um produto...</option>
                           {availableProducts.length === 0
                             ? <option disabled>Nenhum produto para {coilType} {coilThickness}mm</option>
@@ -796,20 +815,20 @@ export default function AppPage() {
                         <div className="flex-1">
                           {demandWeightMode === "kg" ? (
                             <>
-                              <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
-                              <input type="number" placeholder="ex: 3000" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50" />
+                              <label className="field-label">Peso (kg)</label>
+                              <input type="number" placeholder="ex: 3000" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="field-input text-sm" />
                             </>
                           ) : (
                             <>
-                              <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas filhas</label>
-                              <input type="number" min="1" placeholder="ex: 10" value={catalogQty} onChange={(e) => setCatalogQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
+                              <label className="field-label">Qtd. de bobinas filhas</label>
+                              <input type="number" min="1" placeholder="ex: 10" value={catalogQty} onChange={(e) => setCatalogQty(e.target.value)} className="field-input text-sm" />
                             </>
                           )}
                         </div>
                         <button
                           onClick={addDemand}
                           disabled={!selectedProductCode || (demandWeightMode === "kg" ? !newWeight : !catalogQty)}
-                          className="bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                          className="btn-primary h-[40px] w-12"
                         >
                           <Plus className="w-5 h-5" />
                         </button>
@@ -819,45 +838,45 @@ export default function AppPage() {
                     <>
                       <div className="flex gap-2">
                         <div className="flex-1">
-                          <label className="text-xs text-zinc-400 mb-1 block">Largura (mm)</label>
+                          <label className="field-label">Largura (mm)</label>
                           <input
                             type="number"
                             placeholder="ex: 250"
                             value={manualWidth}
                             onChange={(e) => setManualWidth(e.target.value)}
-                            className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
+                            className="field-input text-sm"
                           />
                         </div>
                         <div className="flex-1">
                           {demandWeightMode === "kg" ? (
                             <>
-                              <label className="text-xs text-zinc-400 mb-1 block">Peso (kg)</label>
-                              <input type="number" placeholder="ex: 3000" value={manualWeight} onChange={(e) => setManualWeight(e.target.value)} className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none" />
+                              <label className="field-label">Peso (kg)</label>
+                              <input type="number" placeholder="ex: 3000" value={manualWeight} onChange={(e) => setManualWeight(e.target.value)} className="field-input text-sm" />
                             </>
                           ) : (
                             <>
-                              <label className="text-xs text-amber-400 mb-1 block">Qtd. de bobinas</label>
-                              <input type="number" min="1" placeholder="ex: 10" value={manualQty} onChange={(e) => setManualQty(e.target.value)} className="w-full p-2 border border-amber-700/60 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none" />
+                              <label className="field-label">Qtd. de bobinas</label>
+                              <input type="number" min="1" placeholder="ex: 10" value={manualQty} onChange={(e) => setManualQty(e.target.value)} className="field-input text-sm" />
                             </>
                           )}
                         </div>
                       </div>
                       <div className="flex gap-2 items-end">
                         <div className="flex-1">
-                          <label className="text-xs text-zinc-400 mb-1 block">Descrição (opcional)</label>
+                          <label className="field-label">Descrição (opcional)</label>
                           <input
                             type="text"
                             placeholder="ex: Tampa lateral"
                             value={manualDesc}
                             onChange={(e) => setManualDesc(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && addManualDemand()}
-                            className="w-full p-2 border border-violet-700/60 rounded-lg text-sm bg-violet-950/20 text-zinc-50 focus:ring-2 focus:ring-violet-500 outline-none"
+                            className="field-input text-sm"
                           />
                         </div>
                         <button
                           onClick={addManualDemand}
                           disabled={!manualWidth || (demandWeightMode === "kg" ? !manualWeight : !manualQty)}
-                          className="bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-12 flex items-center justify-center"
+                          className="btn-primary h-[40px] w-12"
                         >
                           <Plus className="w-5 h-5" />
                         </button>
@@ -868,27 +887,27 @@ export default function AppPage() {
 
                 {/* Lista de pedidos */}
                 <div className="max-h-[240px] overflow-y-auto space-y-2">
-                  {demands.length === 0 && <p className="text-center text-zinc-600 text-sm py-3">Nenhum pedido adicionado.</p>}
+                  {demands.length === 0 && <p className="text-center text-ink-faint text-sm py-3">Nenhum pedido adicionado.</p>}
                   {demands.map((item) => {
                     const isManual = item.code === "MAN";
                     return (
-                      <div key={item.id} className={`flex items-center justify-between p-2 rounded-lg border ${isManual ? "bg-violet-950/20 border-violet-800/50" : "bg-zinc-950/60 border-zinc-800"}`}>
+                      <div key={item.id} className="flex items-center justify-between p-2 bg-paper-2 border border-divider">
                         <div className="flex flex-col max-w-[80%]">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-zinc-100">{item.width}mm</span>
-                            <span className={`text-[10px] px-1 rounded border truncate ${isManual ? "bg-violet-950/50 text-violet-200 border-violet-900/60" : "bg-blue-950/50 text-blue-200 border-blue-900/60"}`}>
+                            <span className="font-bold text-ink">{item.width}mm</span>
+                            <span className="text-[10px] px-1 border border-divider bg-paper text-ink-soft truncate">
                               {isManual ? "manual" : item.desc}
                             </span>
                           </div>
                           {isManual && item.desc && item.desc !== `${item.width}mm manual` && (
-                            <span className="text-zinc-400 text-xs">{item.desc}</span>
+                            <span className="text-ink-soft text-xs">{item.desc}</span>
                           )}
                           {item.targetQty != null
-                            ? <span className="text-amber-400 text-xs font-semibold">Qtd: {item.targetQty} bobina{item.targetQty !== 1 ? "s" : ""}</span>
-                            : <span className="text-zinc-400 text-xs">Meta: {item.targetWeight?.toFixed(0)} kg</span>
+                            ? <span className="text-ink-soft text-xs font-semibold">Qtd: {item.targetQty} bobina{item.targetQty !== 1 ? "s" : ""}</span>
+                            : <span className="text-ink-soft text-xs">Meta: {item.targetWeight?.toFixed(0)} kg</span>
                           }
                         </div>
-                        <button onClick={() => removeDemand(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => removeDemand(item.id)} className="text-accent-700 hover:text-accent p-1"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     );
                   })}
@@ -896,22 +915,22 @@ export default function AppPage() {
 
                 {/* Larguras complementares — dentro do card */}
                 <details className="group">
-                  <summary className="flex items-center gap-2 cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition select-none py-1">
-                    <Ruler className="w-3.5 h-3.5 text-amber-500/70" />
+                  <summary className="flex items-center gap-2 cursor-pointer text-xs text-ink-soft hover:text-ink transition select-none py-1">
+                    <Ruler className="w-3.5 h-3.5 text-accent-700/70" />
                     <span>Larguras para complementar sobras</span>
-                    <span className="ml-auto text-zinc-700 group-open:rotate-180 transition-transform">▾</span>
+                    <span className="ml-auto text-ink-faint group-open:rotate-180 transition-transform">▾</span>
                     {fillerWidths.length > 0 && (
-                      <span className="bg-amber-600/80 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">{fillerWidths.length}</span>
+                      <span className="bg-paper-2 text-ink-soft border border-divider text-[10px] px-1.5 py-0.5 rounded-full font-bold">{fillerWidths.length}</span>
                     )}
                   </summary>
-                  <div className="mt-2 space-y-2 pt-2 border-t border-zinc-800/60">
+                  <div className="mt-2 space-y-2 pt-2 border-t border-divider">
                     <div className="flex gap-2">
                       <input
                         type="number"
                         placeholder="Largura mm"
                         value={newFillerWidth}
                         onChange={(e) => setNewFillerWidth(e.target.value)}
-                        className="w-28 p-2 border border-amber-700/50 rounded-lg text-sm bg-amber-950/20 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
+                        className="field-input w-28 text-sm"
                       />
                       <input
                         type="text"
@@ -925,7 +944,7 @@ export default function AppPage() {
                           setFillerWidths((prev) => [...prev, { id: Date.now(), width: w, desc: newFillerDesc.trim() || `${w}mm` }]);
                           setNewFillerWidth(""); setNewFillerDesc(""); setResults(null);
                         }}
-                        className="flex-1 p-2 border border-zinc-700 rounded-lg text-sm bg-zinc-950 text-zinc-50 focus:ring-2 focus:ring-amber-500 outline-none"
+                        className="field-input flex-1 text-sm"
                       />
                       <button
                         onClick={() => {
@@ -935,22 +954,22 @@ export default function AppPage() {
                           setNewFillerWidth(""); setNewFillerDesc(""); setResults(null);
                         }}
                         disabled={!newFillerWidth}
-                        className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-400 text-white p-2 h-[40px] rounded-lg w-10 flex items-center justify-center"
+                        className="btn-ink h-[40px] w-10"
                       >
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
                     {fillerWidths.length === 0 ? (
-                      <p className="text-zinc-600 text-xs text-center py-1">Nenhuma adicionada ainda.</p>
+                      <p className="text-ink-faint text-xs text-center py-1">Nenhuma adicionada ainda.</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {fillerWidths.map((fw) => (
-                          <div key={fw.id} className="flex items-center gap-1 bg-amber-950/30 border border-amber-800/50 rounded-lg px-2 py-1">
-                            <span className="text-amber-200 text-xs font-bold">{fw.width}mm</span>
-                            {fw.desc !== `${fw.width}mm` && <span className="text-amber-200/60 text-[10px]">{fw.desc}</span>}
+                          <div key={fw.id} className="flex items-center gap-1 bg-paper-2 border border-divider px-2 py-1">
+                            <span className="text-ink-soft text-xs font-bold">{fw.width}mm</span>
+                            {fw.desc !== `${fw.width}mm` && <span className="text-ink-faint text-[10px]">{fw.desc}</span>}
                             <button
                               onClick={() => { setFillerWidths((prev) => prev.filter((f) => f.id !== fw.id)); setResults(null); }}
-                              className="text-red-400 hover:text-red-300 ml-1"
+                              className="text-accent-700 hover:text-accent ml-1"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -963,17 +982,15 @@ export default function AppPage() {
               </div>
 
               {/* PASSO 3 — GERAR PLANO */}
-              <div className="px-4 pb-4 pt-3 bg-zinc-950/40 border-t border-zinc-800">
+              <div className="px-4 pb-4 pt-3 bg-paper-2 border-t border-divider">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">3</span>
-                  <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wide">Gerar o plano de corte</span>
+                  <span className="step-badge">3</span>
+                  <span className="text-xs text-ink-soft font-semibold uppercase tracking-wide">Gerar o plano de corte</span>
                 </div>
                 <button
                   onClick={runCalculateOptimization}
                   disabled={demands.length === 0 || isCalculating}
-                  className={`w-full py-3 rounded-xl font-bold text-lg shadow-md flex items-center justify-center gap-2 transition-all ${
-                    isCalculating ? "bg-zinc-800 text-zinc-400" : "bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white"
-                  }`}
+                  className="btn-primary w-full py-3 text-lg"
                 >
                   {isCalculating ? "Calculando..." : <><Calculator className="w-5 h-5" /> Gerar Plano</>}
                 </button>
@@ -981,12 +998,12 @@ export default function AppPage() {
             </div>
 
             {/* Ações secundárias */}
-            <div className="flex items-center gap-4 px-1 text-xs text-zinc-600 flex-wrap">
-              <button onClick={loadDemoPlan} className="hover:text-zinc-400 transition">Carregar demo</button>
-              <button onClick={savePreset} className="hover:text-zinc-400 transition">Salvar configuração</button>
-              {hasSavedPreset && <button onClick={loadPreset} className="hover:text-zinc-400 transition">Restaurar</button>}
-              <button onClick={clearAll} className="hover:text-red-400 transition ml-auto">Limpar tudo</button>
-              {presetStatus && <span className="text-zinc-600 w-full">{presetStatus}</span>}
+            <div className="flex items-center gap-4 px-1 text-xs text-ink-faint flex-wrap">
+              <button onClick={loadDemoPlan} className="hover:text-ink-soft transition">Carregar demo</button>
+              <button onClick={savePreset} className="hover:text-ink-soft transition">Salvar configuração</button>
+              {hasSavedPreset && <button onClick={loadPreset} className="hover:text-ink-soft transition">Restaurar</button>}
+              <button onClick={clearAll} className="hover:text-accent-700 transition ml-auto">Limpar tudo</button>
+              {presetStatus && <span className="text-ink-faint w-full">{presetStatus}</span>}
             </div>
 
           </div>
@@ -994,49 +1011,52 @@ export default function AppPage() {
           {/* RIGHT PANEL */}
           <div className="lg:col-span-8 space-y-5">
 
+            {/* MATÉRIA-PRIMA — sempre visível, mostra o que tem no estoque e o que já foi usado */}
+            <RawMaterialStrip stockCoils={stockCoils} patterns={results?.patterns} />
+
             {/* LONGITUDINAL SUGGESTIONS */}
             {suggestions.length > 0 && (
-              <div className="bg-orange-950/30 border border-orange-800/60 rounded-2xl p-5 shadow-sm animate-fade-in">
+              <div className="panel p-5 animate-fade-in">
                 <div className="flex items-start gap-4">
-                  <div className="bg-orange-900/50 p-3 rounded-full"><Layers className="w-6 h-6 text-orange-300" /></div>
+                  <div className="bg-paper-2 p-3"><Layers className="w-6 h-6 text-accent-700" /></div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-orange-200">Sugestões de Combinação (Meta &gt; 97%)</h3>
-                    <p className="text-orange-200/70 text-sm mb-3">Combos pra preencher as sobras e subir eficiência.</p>
+                    <h3 className="text-lg font-bold text-ink">Sugestões de Combinação (Meta &gt; 97%)</h3>
+                    <p className="text-ink-soft text-sm mb-3">Combos pra preencher as sobras e subir eficiência.</p>
                     <div className="space-y-6">
                       {suggestions.map((sug, idx) => (
-                        <div key={idx} className="bg-zinc-950/50 p-4 rounded-xl border border-orange-800/40 shadow-sm">
-                          <div className="flex justify-between items-center mb-3 border-b border-zinc-800 pb-2">
-                            <p className="text-xs font-bold text-zinc-400 uppercase">
-                              Padrão {String.fromCharCode(65 + sug.patternIndex)} - Sobra: <span className="text-red-400">{sug.waste}mm</span>
+                        <div key={idx} className="bg-paper-2 p-4 border border-divider">
+                          <div className="flex justify-between items-center mb-3 border-b border-divider pb-2">
+                            <p className="text-xs font-bold text-ink-soft uppercase">
+                              Padrão {String.fromCharCode(65 + sug.patternIndex)} - Sobra: <span className="text-accent-700">{sug.waste}mm</span>
                             </p>
-                            <span className="text-xs bg-zinc-900 px-2 py-1 rounded text-zinc-300 border border-zinc-800">Preenche {sug.patternCount} bobinas</span>
+                            <span className="text-xs bg-paper px-2 py-1 text-ink-soft border border-divider">Preenche {sug.patternCount} bobinas</span>
                           </div>
                           <div className="grid grid-cols-1 gap-3">
                             {sug.suggestions.map((combo, cIdx) => (
-                              <div key={cIdx} className="flex flex-col bg-zinc-950/70 p-3 rounded-xl border border-zinc-800 hover:border-blue-700/60 transition-colors">
+                              <div key={cIdx} className="flex flex-col bg-paper p-3 border border-divider hover:border-ink-soft transition-colors">
                                 <div className="flex justify-between items-center mb-2">
                                   <div className="flex items-center gap-2">
                                     <div className="flex -space-x-2">
                                       {combo.items.map((it, i) => (
-                                        <div key={i} className="w-8 h-8 rounded-full bg-blue-950 border-2 border-zinc-950 flex items-center justify-center text-[10px] font-bold text-blue-200 z-10" title={it.desc}>{it.width}</div>
+                                        <div key={i} className="w-8 h-8 rounded-full bg-ink border-2 border-paper flex items-center justify-center text-[10px] font-bold text-paper z-10" title={it.desc}>{it.width}</div>
                                       ))}
                                     </div>
-                                    <span className="text-sm font-bold text-zinc-100 ml-2">= {combo.totalWidth}mm</span>
-                                    <span className="text-xs text-emerald-200 bg-emerald-950/40 px-2 py-0.5 rounded font-medium border border-emerald-900/50">Resto: {combo.remainingWaste}mm</span>
+                                    <span className="text-sm font-bold text-ink ml-2">= {combo.totalWidth}mm</span>
+                                    <span className="text-xs text-ink-soft bg-paper-2 px-2 py-0.5 font-medium border border-divider">Resto: {combo.remainingWaste}mm</span>
                                   </div>
-                                  <span className={`text-xs px-2 py-1 rounded font-bold border ${combo.projectedEfficiency >= 97 ? "bg-emerald-950/40 text-emerald-200 border-emerald-900/50" : "bg-yellow-950/40 text-yellow-200 border-yellow-900/50"}`}>
+                                  <span className={`text-xs px-2 py-1 font-bold border ${combo.projectedEfficiency >= 97 ? "bg-paper-2 text-ink border-divider" : "bg-paper-2 text-accent-700 border-accent/30"}`}>
                                     Eficiência: {combo.projectedEfficiency.toFixed(2)}%
                                   </span>
                                 </div>
-                                <div className="text-xs text-zinc-400 mb-2 space-y-1 pl-2 border-l-2 border-blue-900/50">
+                                <div className="text-xs text-ink-soft mb-2 space-y-1 pl-2 border-l-2 border-divider">
                                   {combo.items.map((it, i) => (
                                     <div key={i} className="flex justify-between">
                                       <span>1x {it.desc} ({it.width}mm)</span>
-                                      <span className="text-zinc-500">+{Math.round(it.weightToAdd)}kg</span>
+                                      <span className="text-ink-faint">+{Math.round(it.weightToAdd)}kg</span>
                                     </div>
                                   ))}
                                 </div>
-                                <button onClick={() => addComboDemand(combo.items)} className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95">
+                                <button onClick={() => addComboDemand(combo.items)} className="btn-ink w-full text-xs">
                                   <Plus className="w-4 h-4" />
                                   Adicionar Combo (+{Math.round(combo.totalWeightToAdd)} kg)
                                 </button>
@@ -1053,39 +1073,28 @@ export default function AppPage() {
 
             {/* NO SUGGESTIONS */}
             {results && results.stats.efficiency < 97 && suggestions.length === 0 && (
-              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 text-center animate-fade-in">
-                <AlertCircle className="w-8 h-8 text-zinc-400 mx-auto mb-2" />
-                <p className="text-zinc-200 font-medium">Nenhuma sugestão automática encontrada.</p>
-                <p className="text-xs text-zinc-400 mt-1">Não encontramos produtos com espessura {coilThickness}mm e tipo {coilType}.</p>
+              <div className="panel p-6 text-center animate-fade-in">
+                <AlertCircle className="w-8 h-8 text-ink-faint mx-auto mb-2" />
+                <p className="text-ink font-medium">Nenhuma sugestão automática encontrada.</p>
+                <p className="text-xs text-ink-soft mt-1">Não encontramos produtos com espessura {coilThickness}mm e tipo {coilType}.</p>
               </div>
             )}
 
             {/* LONGITUDINAL RESULTS */}
             {results && (
               <div className="animate-fade-in space-y-5">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Eficiência Global</p>
-                    <p className={`text-3xl font-bold ${results.stats.efficiency >= 97 ? "text-emerald-400" : "text-orange-300"}`}>{results.stats.efficiency}%</p>
-                  </div>
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Total Bobinas</p>
-                    <p className="text-3xl font-bold text-zinc-50">{results.stats.totalCoils}</p>
-                  </div>
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-                    <p className="text-xs text-zinc-400 uppercase font-bold">Sucata Total</p>
-                    <p className="text-3xl font-bold text-red-400">{results.stats.totalScrapWeight}<span className="text-sm text-zinc-500">kg</span></p>
-                  </div>
-                  <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800 overflow-y-auto max-h-[110px]">
-                    <p className="text-xs text-zinc-400 uppercase font-bold mb-1">Status Pedidos</p>
-                    {Object.entries(results.demandAnalysis).map(([width, data]) => (
-                      <div key={width} className="flex justify-between text-xs border-b border-zinc-800 py-1">
-                        <span className="text-zinc-300">{width}mm:</span>
+                {/* STATUS PEDIDOS — eficiência/sucata/bobinas já ficam na tira de instrumento do topo */}
+                <div className="bg-paper-2 p-4 border border-divider">
+                  <p className="text-xs text-ink-soft uppercase font-bold mb-2">Status dos Pedidos</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
+                    {Object.entries(results.demandAnalysis).map(([demandId, data]) => (
+                      <div key={demandId} className="flex justify-between text-xs border-b border-divider py-1.5">
+                        <span className="text-ink-soft">{data.width}mm{data.desc ? ` — ${data.desc}` : ""}:</span>
                         {data.isQtyMode
-                          ? <span className={data.producedQty >= data.reqQty ? "text-emerald-300" : "text-red-300"}>
+                          ? <span className={data.producedQty >= data.reqQty ? "text-ink font-semibold" : "text-accent-700 font-semibold"}>
                               {data.producedQty}/{data.reqQty} bob.
                             </span>
-                          : <span className={data.producedWeight >= data.reqWeight ? "text-emerald-300" : "text-red-300"}>
+                          : <span className={data.producedWeight >= data.reqWeight ? "text-ink font-semibold" : "text-accent-700 font-semibold"}>
                               {Math.round(data.producedWeight)}/{data.reqWeight.toFixed(0)}kg
                             </span>
                         }
@@ -1094,79 +1103,39 @@ export default function AppPage() {
                   </div>
                 </div>
 
-                {/* PATTERN OPTIONS / VARIAÇÕES */}
+                {/* PATTERN BANKS — instrumento: fileira de abas + uma leitura grande */}
                 {results.patternOptions && results.patternOptions.length > 0 && (
-                  <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl overflow-hidden">
-                    <div className="bg-zinc-950 px-4 py-3 border-b border-zinc-800 flex items-center justify-between gap-2">
+                  <div className="panel">
+                    <div className="panel-head justify-between">
                       <div className="flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-blue-400" />
-                        <h3 className="font-semibold text-zinc-200">Variações de padrão disponíveis</h3>
-                        <span className="text-[10px] text-zinc-500 ml-1 hidden sm:inline">diferentes combinações — mesma bobina mãe</span>
+                        <Layers className="w-4 h-4 text-ink-soft" />
+                        <h3 className="font-semibold text-ink">Bancos de padrão</h3>
+                        <span className="text-[10px] text-ink-faint ml-1 hidden sm:inline">mesma bobina mãe, combinações diferentes</span>
                       </div>
-                      <button
-                        onClick={printPatternOptions}
-                        className="inline-flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
-                      >
+                      <button onClick={printPatternOptions} className="btn-quiet text-xs py-1.5">
                         <Printer className="w-3.5 h-3.5" />
                         Imprimir todas
                       </button>
                     </div>
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {(() => {
-                        const avgCoilWeight = stockCoils.length > 0
-                          ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length
-                          : 10000;
-                        const usableW = Math.max(1, (Number(motherWidth) || 0) - (Number(trim) || 0));
-                        const weightFor = (width, qty) => Math.round((Number(width) / usableW) * avgCoilWeight * qty);
-                        return results.patternOptions.map((opt, idx) => {
-                        const entries = Object.entries(opt.counts);
+
+                    {/* fileira de bancos */}
+                    <div className="flex overflow-x-auto border-b border-divider">
+                      {results.patternOptions.map((opt, idx) => {
                         const isSelected = selectedPatternOption === idx;
                         return (
-                          <div
+                          <button
                             key={idx}
-                            onClick={() => setSelectedPatternOption(isSelected ? null : idx)}
-                            className={`rounded-xl p-3 cursor-pointer transition border-2 ${isSelected ? "border-blue-500 bg-blue-950/30" : "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600"}`}
+                            onClick={() => setSelectedPatternOption(idx)}
+                            className={`flex-none px-4 py-2.5 text-sm font-bold border-r border-divider transition ${isSelected ? "bg-ink text-paper" : "bg-paper text-ink-soft hover:bg-paper-2"}`}
                           >
-                            <div className="flex justify-between items-center mb-2">
-                              <span className={`text-xs font-bold uppercase ${isSelected ? "text-blue-300" : "text-zinc-500"}`}>
-                                {isSelected ? "✓ " : ""}Opção {idx + 1}
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${Number(opt.efficiency) >= 97 ? "bg-emerald-950/40 text-emerald-300 border-emerald-900/50" : Number(opt.efficiency) >= 90 ? "bg-yellow-950/40 text-yellow-300 border-yellow-900/50" : "bg-red-950/40 text-red-300 border-red-900/50"}`}>
-                                  {opt.efficiency}%
-                                </span>
-                                <span className="text-[10px] text-zinc-500">Sobra: {opt.waste}mm</span>
-                              </div>
-                            </div>
-                            <div className="h-7 w-full bg-zinc-800 rounded-lg overflow-hidden flex border border-zinc-700 mb-2">
-                              {entries.map(([w, qty], i) => {
-                                const pct = (Number(w) * qty / Number(motherWidth)) * 100;
-                                return (
-                                  <div key={w} className={`${COLORS[i % COLORS.length]} h-full border-r border-white/20 flex items-center justify-center`} style={{ width: `${pct}%` }} title={`${qty}× ${w}mm`}>
-                                    {pct > 10 && <span className="text-white text-[9px] font-bold">{qty}×{w}</span>}
-                                  </div>
-                                );
-                              })}
-                              {opt.waste > 0 && (
-                                <div className="h-full bg-red-950/40 flex items-center justify-center" style={{ width: `${(opt.waste / Number(motherWidth)) * 100}%` }}>
-                                  {(opt.waste / Number(motherWidth)) * 100 > 5 && <span className="text-red-400 text-[9px] font-bold">{opt.waste}mm</span>}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              {entries.map(([w, qty], i) => (
-                                <div key={w} className={`flex flex-col items-center px-2 py-1 rounded-lg font-semibold ${COLORS[i % COLORS.length]} text-white`} style={{minWidth: 60}}>
-                                  <span className="text-[11px] font-bold leading-tight">{qty}× {w}mm</span>
-                                  <span className="text-[10px] opacity-80 leading-tight">~{weightFor(w, qty).toLocaleString()}kg</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                            {String.fromCharCode(65 + idx)} <span className={isSelected ? "text-paper/70" : "text-ink-faint"}>·</span>{" "}
+                            <span className={Number(opt.efficiency) >= 97 ? "" : isSelected ? "text-accent" : "text-accent-700"}>{opt.efficiency}%</span>
+                          </button>
                         );
-                      });})()}
+                      })}
                     </div>
 
-                    {/* DETALHE DA OPÇÃO SELECIONADA */}
+                    {/* leitura do banco selecionado */}
                     {selectedPatternOption !== null && results.patternOptions[selectedPatternOption] && (() => {
                       const opt = results.patternOptions[selectedPatternOption];
                       const entries = Object.entries(opt.counts);
@@ -1175,80 +1144,62 @@ export default function AppPage() {
                       fillerWidths.forEach((fw) => { allWidthDescMap[fw.width] = fw.desc || `${fw.width}mm`; });
                       let pos = 0;
                       const coords = [];
-                      entries.forEach(([w, qty], colorIdx) => {
+                      entries.forEach(([w, qty]) => {
                         for (let i = 0; i < qty; i++) {
-                          coords.push({ start: pos, width: Number(w), end: pos + Number(w), desc: allWidthDescMap[Number(w)] || `${w}mm`, colorIdx });
+                          coords.push({ start: pos, width: Number(w), end: pos + Number(w), desc: allWidthDescMap[Number(w)] || `${w}mm` });
                           pos += Number(w);
                         }
                       });
                       const mw = Number(motherWidth);
                       const avgCW = stockCoils.length > 0 ? stockCoils.reduce((a, c) => a + c.weight, 0) / stockCoils.length : 10000;
-                      const usableW2 = Math.max(1, mw - (Number(trim) || 0));
-                      const estWeight = (w) => Math.round((Number(w) / usableW2) * avgCW);
+                      // peso proporcional à largura BRUTA da bobina — o refilo é sucata real, não pode sumir da conta
+                      const estWeight = (w) => Math.round((Number(w) / mw) * avgCW);
+
                       return (
-                        <div className="mx-4 mb-4 border-t border-zinc-700 pt-4">
+                        <div className="p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-bold text-zinc-100 text-sm">
-                              Mapa de Setup — Opção {selectedPatternOption + 1}
-                              <span className={`ml-2 text-xs px-2 py-0.5 rounded border font-bold ${Number(opt.efficiency) >= 97 ? "bg-emerald-950/40 text-emerald-300 border-emerald-900/50" : "bg-yellow-950/40 text-yellow-300 border-yellow-900/50"}`}>
-                                {opt.efficiency}%
-                              </span>
+                            <h4 className="font-bold text-ink text-sm">
+                              Mapa de Setup — Banco {String.fromCharCode(65 + selectedPatternOption)}
                             </h4>
                             <button
                               onClick={() => printSinglePatternOption(opt, selectedPatternOption)}
-                              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                              className="btn-quiet text-xs py-1.5"
                             >
-                              <Printer className="w-3.5 h-3.5" /> Imprimir esta opção
+                              <Printer className="w-3.5 h-3.5" /> Imprimir este banco
                             </button>
                           </div>
-                          {/* barra grande */}
-                          <div className="h-12 w-full bg-zinc-800 rounded-xl overflow-hidden flex border-2 border-zinc-700 mb-4">
-                            {entries.map(([w, qty], i) => {
-                              const pct = (Number(w) * qty / mw) * 100;
-                              return (
-                                <div key={w} className={`${COLORS[i % COLORS.length]} h-full border-r-2 border-white/30 flex items-center justify-center`} style={{ width: `${pct}%` }}>
-                                  {pct > 8 && <span className="text-white font-bold text-sm">{w}</span>}
-                                </div>
-                              );
-                            })}
-                            {opt.waste > 0 && (
-                              <div className="h-full bg-red-950/40 border-l border-red-900/40 flex items-center justify-center" style={{ width: `${(opt.waste / mw) * 100}%` }}>
-                                <span className="text-red-300 text-xs font-bold">LIVRE</span>
-                              </div>
-                            )}
-                          </div>
-                          {/* tabela */}
-                          <div className="overflow-x-auto">
+                          <StepRow segments={entries.map(([w, qty]) => ({ width: Number(w) * Number(qty), label: `${qty}×${w}mm` }))} totalWidth={mw} wasteWidth={opt.waste} height="h-14" />
+                          <div className="overflow-x-auto mt-4">
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="border-b border-zinc-700">
-                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">#</th>
-                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Início</th>
-                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Corte</th>
-                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Fim</th>
-                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Produto</th>
-                                  <th className="text-left py-2 px-3 text-xs text-zinc-400 font-bold uppercase">Peso est.</th>
+                                <tr className="border-b border-divider">
+                                  <th className="text-left py-2 px-3 text-xs text-ink-soft font-bold uppercase">#</th>
+                                  <th className="text-left py-2 px-3 text-xs text-ink-soft font-bold uppercase">Início</th>
+                                  <th className="text-left py-2 px-3 text-xs text-ink-soft font-bold uppercase">Corte</th>
+                                  <th className="text-left py-2 px-3 text-xs text-ink-soft font-bold uppercase">Fim</th>
+                                  <th className="text-left py-2 px-3 text-xs text-ink-soft font-bold uppercase">Produto</th>
+                                  <th className="text-left py-2 px-3 text-xs text-ink-soft font-bold uppercase">Peso est.</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {coords.map((c, i) => (
-                                  <tr key={i} className="border-b border-zinc-800/60">
-                                    <td className="py-2 px-3 text-zinc-400">{i + 1}</td>
-                                    <td className="py-2 px-3 text-blue-400 font-mono text-xs">{c.start}mm</td>
-                                    <td className="py-2 px-3 font-bold text-zinc-100">{c.width}mm</td>
-                                    <td className="py-2 px-3 text-zinc-400 font-mono text-xs">{c.end}mm</td>
-                                    <td className="py-2 px-3 text-zinc-300">{c.desc}</td>
-                                    <td className="py-2 px-3 text-emerald-400 font-semibold text-xs">~{estWeight(c.width).toLocaleString()} kg</td>
+                                  <tr key={i} className="border-b border-divider/60">
+                                    <td className="py-2 px-3 text-ink-soft">{i + 1}</td>
+                                    <td className="py-2 px-3 text-ink-soft font-mono text-xs">{c.start}mm</td>
+                                    <td className="py-2 px-3 font-bold text-ink">{c.width}mm</td>
+                                    <td className="py-2 px-3 text-ink-soft font-mono text-xs">{c.end}mm</td>
+                                    <td className="py-2 px-3 text-ink-soft">{c.desc}</td>
+                                    <td className="py-2 px-3 text-ink-soft font-semibold text-xs">~{estWeight(c.width).toLocaleString()} kg</td>
                                   </tr>
                                 ))}
                                 {opt.waste > 0 && (
-                                  <tr className="bg-red-950/20">
-                                    <td className="py-2 px-3 text-red-400 font-bold">Ref</td>
-                                    <td className="py-2 px-3 text-red-400 font-mono text-xs">{pos}mm</td>
-                                    <td className="py-2 px-3 font-bold text-red-400">{opt.waste}mm</td>
-                                    <td className="py-2 px-3 text-red-400 font-mono text-xs">{mw}mm</td>
-                                    <td className="py-2 px-3 text-red-400 font-bold">SUCATA / SOBRA</td>
-                                    <td className="py-2 px-3 text-red-400 text-xs">~{estWeight(opt.waste).toLocaleString()} kg</td>
+                                  <tr className="bg-paper-2">
+                                    <td className="py-2 px-3 text-accent-700 font-bold">Ref</td>
+                                    <td className="py-2 px-3 text-accent-700 font-mono text-xs">{pos}mm</td>
+                                    <td className="py-2 px-3 font-bold text-accent-700">{opt.waste}mm</td>
+                                    <td className="py-2 px-3 text-accent-700 font-mono text-xs">{mw}mm</td>
+                                    <td className="py-2 px-3 text-accent-700 font-bold">SUCATA / SOBRA</td>
+                                    <td className="py-2 px-3 text-accent-700 text-xs">~{estWeight(opt.waste).toLocaleString()} kg</td>
                                   </tr>
                                 )}
                               </tbody>
@@ -1262,18 +1213,18 @@ export default function AppPage() {
 
                 {/* FILLER RESULTS */}
                 {results.fillerAnalysis && (
-                  <div className="bg-amber-950/20 border border-amber-800/50 rounded-2xl p-4">
-                    <p className="text-xs text-amber-300 uppercase font-bold mb-3 flex items-center gap-2">
-                      <Ruler className="w-3.5 h-3.5" /> Larguras complementares — produção estimada
+                  <div className="panel p-4">
+                    <p className="text-xs text-ink-soft uppercase font-bold mb-3 flex items-center gap-2">
+                      <Ruler className="w-3.5 h-3.5 text-accent-700" /> Larguras complementares — produção estimada
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {Object.entries(results.fillerAnalysis).map(([width, data]) => (
-                        <div key={width} className="bg-zinc-950/60 border border-amber-900/30 rounded-xl p-3">
-                          <p className="text-amber-200 font-bold text-lg">{width}mm</p>
-                          <p className="text-zinc-300 text-sm">{data.desc}</p>
+                        <div key={width} className="bg-paper-2 border border-divider p-3">
+                          <p className="text-ink font-bold text-lg">{width}mm</p>
+                          <p className="text-ink-soft text-sm">{data.desc}</p>
                           <div className="mt-2 space-y-0.5">
-                            <p className="text-xs text-zinc-400">Qtd: <span className="text-amber-300 font-semibold">{data.producedQty} bobinas</span></p>
-                            <p className="text-xs text-zinc-400">Peso: <span className="text-amber-300 font-semibold">~{Math.round(data.producedWeight)} kg</span></p>
+                            <p className="text-xs text-ink-faint">Qtd: <span className="text-ink-soft font-semibold">{data.producedQty} bobinas</span></p>
+                            <p className="text-xs text-ink-faint">Peso: <span className="text-ink-soft font-semibold">~{Math.round(data.producedWeight)} kg</span></p>
                           </div>
                         </div>
                       ))}
@@ -1285,78 +1236,65 @@ export default function AppPage() {
                   {!results.patternOptions && results.patterns.map((pattern, idx) => {
                     const visualMotherWidth = Number(motherWidth);
                     const patternEfficiency = ((pattern.usedWidth / visualMotherWidth) * 100).toFixed(1);
-                    const uniqueCuts = [...new Set(pattern.cuts)];
                     return (
-                      <div key={idx} className="bg-zinc-900/60 rounded-2xl border border-zinc-800 overflow-hidden shadow-sm">
-                        <div className="bg-zinc-950 px-5 py-4 border-b border-zinc-800 flex justify-between items-center">
+                      <div key={idx} className="panel">
+                        <div className="panel-head justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 text-white font-bold w-10 h-10 rounded-xl flex items-center justify-center text-lg">{idx + 1}</div>
+                            <div className="bg-ink text-paper font-bold w-10 h-10 flex items-center justify-center text-lg">{idx + 1}</div>
                             <div>
-                              <h4 className="font-bold text-zinc-50">Padrão {String.fromCharCode(65 + idx)}</h4>
-                              <div className="text-sm text-zinc-400">
+                              <h4 className="font-bold text-ink">Padrão {String.fromCharCode(65 + idx)}</h4>
+                              <div className="text-sm text-ink-soft">
                                 Executar em: <strong>{pattern.count} bobina(s)</strong><br />
-                                <span className="text-xs bg-zinc-900 px-1 rounded border border-zinc-800">Pesos: {pattern.assignedCoils.map((c) => c.weight + "kg").join(", ")}</span>
+                                <span className="text-xs bg-paper px-1 border border-divider">Pesos: {pattern.assignedCoils.map((c) => c.weight + "kg").join(", ")}</span>
                               </div>
                             </div>
                           </div>
                           <div className="text-right flex flex-col items-end">
-                            <div className={`text-sm font-bold px-2 py-0.5 rounded mb-1 ${Number(patternEfficiency) > 90 ? "bg-emerald-950/40 text-emerald-200 border border-emerald-900/60" : "bg-red-950/40 text-red-200 border border-red-900/60"}`}>
+                            <div className={`text-sm font-bold px-2 py-0.5 mb-1 border ${Number(patternEfficiency) > 90 ? "bg-paper text-ink border-divider" : "bg-paper text-accent-700 border-accent/40"}`}>
                               Efic: {patternEfficiency}%
                             </div>
-                            <p className="text-xs text-zinc-500">Perda: {pattern.scrapWeight.toFixed(0)}kg</p>
+                            <p className="text-xs text-ink-faint">Perda: {pattern.scrapWeight.toFixed(0)}kg</p>
                           </div>
                         </div>
 
                         <div className="p-5">
-                          <div className="h-16 w-full bg-zinc-800 rounded-xl overflow-hidden flex border-2 border-zinc-700 relative">
-                            {pattern.cuts.map((cut, i) => {
-                              const colorIndex = uniqueCuts.indexOf(cut) % COLORS.length;
-                              const widthPercent = (cut.width / visualMotherWidth) * 100;
-                              return (
-                                <div key={i} className={`${COLORS[colorIndex]} h-full border-r border-white/30 flex flex-col items-center justify-center text-white transition-all hover:brightness-110 cursor-help`}
-                                  style={{ width: `${widthPercent}%` }} title={`${cut.width}mm`}>
-                                  {widthPercent > 8 && <span className="font-bold text-sm">{cut.width}</span>}
-                                </div>
-                              );
-                            })}
-                            {visualMotherWidth - pattern.usedWidth > 0 && (
-                              <div className="h-full bg-repeating-linear-stripes bg-red-950/30 flex items-center justify-center"
-                                style={{ width: `${((visualMotherWidth - pattern.usedWidth) / visualMotherWidth) * 100}%` }}>
-                                <span className="text-red-300 text-xs font-bold">LIVRE</span>
-                              </div>
-                            )}
-                          </div>
+                          <StepRow
+                            segments={pattern.cuts.map((cut) => ({ width: cut.width, label: cut.desc }))}
+                            totalWidth={visualMotherWidth}
+                            wasteWidth={visualMotherWidth - pattern.usedWidth}
+                            height="h-16"
+                          />
 
                           <div className="mt-4">
-                            <h5 className="text-sm font-bold text-zinc-200 mb-2 flex items-center gap-2"><Ruler className="w-4 h-4" />Mapa de Setup</h5>
-                            <div className="overflow-x-auto border border-zinc-800 rounded-xl">
+                            <h5 className="text-sm font-bold text-ink mb-2 flex items-center gap-2"><Ruler className="w-4 h-4 text-accent-700" />Mapa de Setup</h5>
+                            <div className="overflow-x-auto border border-divider">
                               <table className="w-full text-xs text-left">
-                                <thead className="bg-zinc-950 text-zinc-400">
+                                <thead className="bg-paper-2 text-ink-soft">
                                   <tr>
-                                    <th className="p-2 border-r border-zinc-800">#</th>
-                                    <th className="p-2 border-r border-zinc-800">Início</th>
-                                    <th className="p-2 border-r border-zinc-800">Corte</th>
-                                    <th className="p-2 border-r border-zinc-800">Fim</th>
+                                    <th className="p-2 border-r border-divider">#</th>
+                                    <th className="p-2 border-r border-divider">Início</th>
+                                    <th className="p-2 border-r border-divider">Corte</th>
+                                    <th className="p-2 border-r border-divider">Fim</th>
                                     <th className="p-2">Produto</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {pattern.setupCoordinates.map((setup, sIdx) => (
-                                    <tr key={sIdx} className="border-t border-zinc-800">
-                                      <td className="p-2 border-r border-zinc-800 font-bold text-zinc-500">{sIdx + 1}</td>
-                                      <td className="p-2 border-r border-zinc-800 font-mono text-blue-300 font-bold">{setup.start} mm</td>
-                                      <td className="p-2 border-r border-zinc-800 font-bold text-base text-zinc-50">{setup.width} mm</td>
-                                      <td className="p-2 border-r border-zinc-800 font-mono text-zinc-300">{setup.end} mm</td>
-                                      <td className="p-2 text-zinc-300 truncate max-w-[160px]">{setup.desc}</td>
+                                    <tr key={sIdx} className="border-t border-divider">
+                                      <td className="p-2 border-r border-divider font-bold text-ink-faint">{sIdx + 1}</td>
+                                      <td className="p-2 border-r border-divider font-mono text-ink-soft font-bold">{setup.start} mm</td>
+                                      <td className="p-2 border-r border-divider font-bold text-base text-ink">{setup.width} mm</td>
+                                      <td className="p-2 border-r border-divider font-mono text-ink-soft">{setup.end} mm</td>
+                                      <td className="p-2 text-ink-soft truncate max-w-[160px]">{setup.desc}</td>
                                     </tr>
                                   ))}
                                   {visualMotherWidth - pattern.usedWidth > 0 && (
-                                    <tr className="border-t border-red-900/50 bg-red-950/30">
-                                      <td className="p-2 border-r border-zinc-800 text-red-300 font-bold">Ref</td>
-                                      <td className="p-2 border-r border-zinc-800 font-mono text-zinc-400">{pattern.usedWidth} mm</td>
-                                      <td className="p-2 border-r border-zinc-800 font-bold text-red-200">{(visualMotherWidth - pattern.usedWidth).toFixed(1)} mm</td>
-                                      <td className="p-2 border-r border-zinc-800 font-mono text-zinc-400">{visualMotherWidth} mm</td>
-                                      <td className="p-2 text-red-200 font-bold text-xs uppercase">Sucata / Sobra</td>
+                                    <tr className="border-t border-accent/30 bg-paper-2">
+                                      <td className="p-2 border-r border-divider text-accent-700 font-bold">Ref</td>
+                                      <td className="p-2 border-r border-divider font-mono text-ink-soft">{pattern.usedWidth} mm</td>
+                                      <td className="p-2 border-r border-divider font-bold text-accent-700">{(visualMotherWidth - pattern.usedWidth).toFixed(1)} mm</td>
+                                      <td className="p-2 border-r border-divider font-mono text-ink-soft">{visualMotherWidth} mm</td>
+                                      <td className="p-2 text-accent-700 font-bold text-xs uppercase">Sucata / Sobra</td>
                                     </tr>
                                   )}
                                 </tbody>
@@ -1372,16 +1310,39 @@ export default function AppPage() {
             )}
 
             {!results && !isCalculating && (
-              <div className="h-full flex flex-col items-center justify-center text-zinc-500 bg-zinc-900/40 rounded-2xl border border-dashed border-zinc-800 p-12">
-                <Scale className="w-16 h-16 mb-4 opacity-50" />
-                <p>Insira demandas para calcular.</p>
-              </div>
+              <section className="border border-divider border-t-4 border-t-accent bg-paper p-5 md:p-8" aria-labelledby="empty-plan-title">
+                <div className="flex flex-wrap justify-between gap-3 border-b border-divider pb-5 text-xs">
+                  <span className="font-bold uppercase tracking-[0.16em] text-accent-700">Plano de corte</span>
+                  <span className="text-ink-soft">{demands.length ? "Pronto para calcular" : "Aguardando pedidos"}</span>
+                </div>
+                <h2 id="empty-plan-title" className="mt-8 text-2xl md:text-3xl font-extrabold tracking-tight">{demands.length ? "Pedidos definidos. Gere o plano." : "Cada corte come?a na bobina."}</h2>
+                <p className="mt-3 max-w-lg text-sm text-ink-soft leading-relaxed">
+                  {demands.length ? "Use Gerar Plano para calcular os padr?es de corte, a efici?ncia e a sucata dos pedidos adicionados." : "Confira a bobina m?e e adicione os pedidos por peso ou quantidade. O plano mostrar? as larguras de corte e o refilo de cada padr?o."}
+                </p>
+                <div className="mt-8 flex flex-wrap justify-between gap-2 text-xs font-bold">
+                  <span>Bobina m?e ? {Number(motherWidth) || 0} mm</span>
+                  <span className="text-ink-soft">{coilType} ? {Number(coilThickness) || 0} mm</span>
+                </div>
+                <div className="mt-3 flex h-24 border border-divider bg-paper-2 overflow-hidden" aria-label="Bobina sem plano calculado">
+                  <div className="flex-1 flex items-center justify-center border-r border-divider text-ink-soft text-xs font-bold uppercase tracking-wider">Sem cortes definidos</div>
+                  <div className="bg-repeating-linear-stripes border-l border-accent/40" style={{ width: Math.min(100, Math.max(0, Number(trim) / (Number(motherWidth) || 1) * 100)) + "%" }} />
+                </div>
+                <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs">
+                  <span className="font-bold">Largura ?til ? {Math.max(0, Number(motherWidth) - Number(trim)) || 0} mm</span>
+                  <span className="text-accent-700">Refilo ? {Number(trim) || 0} mm</span>
+                </div>
+                <ol className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-divider pt-5 text-xs text-ink-soft">
+                  <li><strong className="block text-accent-700 mb-1">01 / Bobina</strong>Confira material e estoque</li>
+                  <li><strong className="block text-accent-700 mb-1">02 / Pedidos</strong>Defina larguras e demanda</li>
+                  <li><strong className="block text-accent-700 mb-1">03 / Corte</strong>Gere e confira o plano</li>
+                </ol>
+              </section>
             )}
           </div>
         </div>
 
-        <footer className="pt-3 border-t border-zinc-800 text-center text-xs text-zinc-500">
-          © {new Date().getFullYear()} SmartSlit — {userProfile?.companyName || ""}
+        <footer className="pt-3 border-t border-divider text-center text-xs text-ink-faint">
+          © {new Date().getFullYear()} Betini Slitter — {userProfile?.companyName || ""}
         </footer>
       </div>
 
@@ -1405,7 +1366,7 @@ export default function AppPage() {
 
       <style>{`
         .bg-repeating-linear-stripes {
-          background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(239,68,68,.18) 5px, rgba(239,68,68,.18) 10px);
+          background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(236,48,19,.14) 5px, rgba(236,48,19,.14) 10px);
         }
         @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-fade-in { animation: fade-in 0.4s ease-out forwards; }

@@ -1,12 +1,12 @@
 import * as XLSX from "xlsx";
 
-export const exportPlanToExcel = (results, machineConfig, companyName = "SmartSlit") => {
+export const exportPlanToExcel = (results, machineConfig, companyName = "Betini Slitter") => {
   const wb = XLSX.utils.book_new();
   const { motherWidth, trim, coilThickness, coilType } = machineConfig;
 
   // Sheet 1: Resumo
   const summaryData = [
-    ["SmartSlit — Ordem de Producao"],
+    ["Betini Slitter — Ordem de Producao"],
     ["Empresa:", companyName],
     ["Data:", new Date().toLocaleString("pt-BR")],
     ["Material:", `${coilType} ${coilThickness}mm`],
@@ -54,6 +54,6 @@ export const exportPlanToExcel = (results, machineConfig, companyName = "SmartSl
     XLSX.utils.book_append_sheet(wb, patternSheet, `Padrao ${label}`);
   });
 
-  const fileName = `SmartSlit-Plano-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `Betini-Slitter-Plano-${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(wb, fileName);
 };
