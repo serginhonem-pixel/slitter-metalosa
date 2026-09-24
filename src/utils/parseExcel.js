@@ -49,7 +49,7 @@ export const parseExcelFile = (file) => {
 
           const code = String(findValue(["codigo", "cod", "code"])).trim();
           const desc = String(
-            findValue(["descricao", "descricao produto", "descri??o", "descricao do produto"])
+            findValue(["descricao", "descricao produto", "descricao do produto"])
           ).trim();
           const type = String(findValue(["tipo", "classe"])).trim();
           const thickness = normalizeNumber(findValue(["espessura", "thickness"]));

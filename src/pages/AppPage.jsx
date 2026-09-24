@@ -507,7 +507,7 @@ export default function AppPage() {
 
     const summary = `<div class="total-summary"><div class="summary-box"><div class="summary-label">Total Bobinas</div><div class="summary-val">${results.stats.totalCoils}</div></div><div class="summary-box"><div class="summary-label">Eficiência</div><div class="summary-val">${results.stats.efficiency}%</div></div><div class="summary-box"><div class="summary-label" style="color:#ae1800">Sucata</div><div class="summary-val" style="color:#ae1800">${results.stats.totalScrapWeight}kg</div></div></div>`;
 
-    reportWindow.document.write(`<html lang="pt-BR"><head><meta charset="UTF-8">${printBrandStyles}<title>Betini Slitter | Ordem de Produ??o</title>${styles}</head><body>${printBrandHeader}<h1>Ordem de Produ??o</h1>${header}${cards}${summary}<a href="#" onclick="window.print();return false;" class="print-btn">🖨️ Imprimir / Salvar PDF</a></body></html>`);
+    reportWindow.document.write(`<html lang="pt-BR"><head><meta charset="UTF-8">${printBrandStyles}<title>Betini Slitter | Ordem de Produção</title>${styles}</head><body>${printBrandHeader}<h1>Ordem de Produção</h1>${header}${cards}${summary}<a href="#" onclick="window.print();return false;" class="print-btn">🖨️ Imprimir / Salvar PDF</a></body></html>`);
     reportWindow.document.close();
   };
 
