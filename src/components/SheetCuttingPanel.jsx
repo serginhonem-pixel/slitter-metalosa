@@ -186,7 +186,12 @@ export default function SheetCuttingPanel() {
                         backgroundColor: PALETTE[plIdx % PALETTE.length],
                       }}
                     >
-                      {pl.label}
+                      <span
+                        className="whitespace-nowrap"
+                        style={pl.height > pl.width * 1.8 ? { writingMode: "vertical-rl" } : undefined}
+                      >
+                        {pl.label}
+                      </span>
                     </div>
                   ))}
                 </div>

@@ -536,7 +536,13 @@ export const calculateSheetOptimization = ({ sheetWidth, sheetHeight, sheetDeman
   };
 
   const findBestPlacement = (piece, targetSheets) => {
-    let best = null;
+    // Rotation is a last resort: we only rotate a piece when no unrotated
+    // placement fits anywhere. Scoring both orientations together lets a
+    // slightly-better-scoring rotated fit win even when a perfectly good
+    // unrotated fit exists, which produces needlessly inconsistent layouts
+    // for pieces that could otherwise tile cleanly in one orientation.
+    let bestUnrotated = null;
+    let bestRotated = null;
     const orientations = [{ w: piece.width, h: piece.height, rotated: false }];
     if (piece.width !== piece.height) {
       orientations.push({ w: piece.height, h: piece.width, rotated: true });
@@ -549,23 +555,26 @@ export const calculateSheetOptimization = ({ sheetWidth, sheetHeight, sheetDeman
           const areaWaste = rect.width * rect.height - opt.w * opt.h;
           const shortSide = Math.min(rect.width - opt.w, rect.height - opt.h);
           const score = areaWaste * 1000 + shortSide;
-          if (!best || score < best.score) {
-            best = {
-              sheetIdx,
-              rectIdx,
-              x: rect.x,
-              y: rect.y,
-              width: opt.w,
-              height: opt.h,
-              rotated: opt.rotated,
-              score,
-            };
+          const candidate = {
+            sheetIdx,
+            rectIdx,
+            x: rect.x,
+            y: rect.y,
+            width: opt.w,
+            height: opt.h,
+            rotated: opt.rotated,
+            score,
+          };
+          if (opt.rotated) {
+            if (!bestRotated || score < bestRotated.score) bestRotated = candidate;
+          } else if (!bestUnrotated || score < bestUnrotated.score) {
+            bestUnrotated = candidate;
           }
         });
       });
     });
 
-    return best;
+    return bestUnrotated || bestRotated;
   };
 
   const placePiece = (sheet, placement, piece) => {
@@ -753,7 +762,9 @@ export const calculateSheetOptimization = ({ sheetWidth, sheetHeight, sheetDeman
       };
 
       const findBestPlacementInRects = (piece) => {
-        let best = null;
+        // Same rotation-as-last-resort rule as the main packer (see findBestPlacement).
+        let bestUnrotated = null;
+        let bestRotated = null;
         const orientations = [{ w: piece.width, h: piece.height, rotated: false }];
         if (piece.width !== piece.height) {
           orientations.push({ w: piece.height, h: piece.width, rotated: true });
@@ -765,13 +776,16 @@ export const calculateSheetOptimization = ({ sheetWidth, sheetHeight, sheetDeman
             const areaWaste = rect.width * rect.height - opt.w * opt.h;
             const shortSide = Math.min(rect.width - opt.w, rect.height - opt.h);
             const score = areaWaste * 1000 + shortSide;
-            if (!best || score < best.score) {
-              best = { rectIdx, x: rect.x, y: rect.y, width: opt.w, height: opt.h, score };
+            const candidate = { rectIdx, x: rect.x, y: rect.y, width: opt.w, height: opt.h, score };
+            if (opt.rotated) {
+              if (!bestRotated || score < bestRotated.score) bestRotated = candidate;
+            } else if (!bestUnrotated || score < bestUnrotated.score) {
+              bestUnrotated = candidate;
             }
           });
         });
 
-        return best;
+        return bestUnrotated || bestRotated;
       };
 
       const placeInRects = (placement) => {
