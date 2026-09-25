@@ -22,6 +22,7 @@ import ImportPlanModal from "../components/ImportPlanModal";
 import PlanHistory from "../components/PlanHistory";
 import StepRow from "../components/StepRow";
 import RawMaterialStrip from "../components/RawMaterialStrip";
+import SheetCuttingPanel from "../components/SheetCuttingPanel";
 
 const printBrandHeader = `<header class="print-brand">${brandSymbolSvg}<div><small>BETINI STUDIO / Slitter</small><strong>Betini Slitter</strong></div></header>`;
 const printBrandStyles = `<style>
@@ -82,6 +83,7 @@ export default function AppPage() {
   // ---- CLOUD UI STATE ----
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [cutMode, setCutMode] = useState("slitter");
   const [showHistory, setShowHistory] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -655,6 +657,26 @@ export default function AppPage() {
         </div>
         </header>
 
+        {/* CUT MODE TOGGLE */}
+        <div className="segmented max-w-xs">
+          <button
+            onClick={() => setCutMode("slitter")}
+            className={`segmented-option ${cutMode === "slitter" ? "active" : ""}`}
+          >
+            Slitter (bobina)
+          </button>
+          <button
+            onClick={() => setCutMode("chapa")}
+            className={`segmented-option ${cutMode === "chapa" ? "active" : ""}`}
+          >
+            Chapa (MDF)
+          </button>
+        </div>
+
+        {cutMode === "chapa" && <SheetCuttingPanel />}
+
+        {cutMode === "slitter" && (
+        <>
         {/* SAVE STATUS TOAST */}
         {saveStatus && (
           <div className="callout-ink text-ink text-sm text-center animate-fade-in">
@@ -1373,6 +1395,8 @@ export default function AppPage() {
             )}
           </div>
         </div>
+        </>
+        )}
 
         <footer className="pt-3 border-t border-divider text-center text-xs text-ink-faint">
           © {new Date().getFullYear()} Betini Slitter — {userProfile?.companyName || ""}
