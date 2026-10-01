@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import brandSymbol from "../assets/betini/betini-simbolo.svg";
-import brandSymbolSvg from "../assets/betini/betini-simbolo.svg?raw";
+import { printBrandHeader as buildPrintBrandHeader, printBrandStyles } from "../utils/printBrand";
 import {
   Plus, Trash2, Calculator, Settings, Database,
   TrendingUp, Printer, AlertCircle, Box, Scale,
@@ -24,14 +24,7 @@ import StepRow from "../components/StepRow";
 import RawMaterialStrip from "../components/RawMaterialStrip";
 import SheetCuttingPanel from "../components/SheetCuttingPanel";
 
-const printBrandHeader = `<header class="print-brand">${brandSymbolSvg}<div><small>BETINI STUDIO / Slitter</small><strong>Betini Slitter</strong></div></header>`;
-const printBrandStyles = `<style>
-.print-brand{display:flex;align-items:center;gap:14px;border-top:4px solid #ec3013;padding-top:16px;margin-bottom:24px}
-.print-brand svg{width:56px;height:56px;flex-shrink:0}
-.print-brand small{display:block;font:700 10px Arial,sans-serif;letter-spacing:2px;color:#ae1800}
-.print-brand strong{display:block;font-size:26px;letter-spacing:-1px}
-@media print{.print-brand,th,[style*="background"]{print-color-adjust:exact;-webkit-print-color-adjust:exact}thead{display:table-header-group}.card{break-inside:avoid}}
-</style>`;
+const printBrandHeader = buildPrintBrandHeader("Slitter");
 
 const PRESET_STORAGE_KEY = "slitter-preset-v1";
 
