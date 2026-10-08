@@ -21,12 +21,12 @@ export const exportPlanToExcel = (results, machineConfig, companyName = "Betini 
       results.stats.totalInputWeight,
     ],
     [],
-    ["Produto (mm)", "Meta (kg)", "Produzido (kg)", "Status"],
-    ...Object.entries(results.demandAnalysis).map(([width, data]) => [
-      `${width}mm — ${data.desc}`,
-      Number(data.reqWeight).toFixed(0),
+    ["Produto (mm)", "Meta", "Produzido (kg)", "Status"],
+    ...Object.values(results.demandAnalysis).map((data) => [
+      `${data.width}mm — ${data.desc}`,
+      data.isQtyMode ? `${data.reqQty} bob.` : `${Number(data.reqWeight).toFixed(0)} kg`,
       Math.round(data.producedWeight),
-      data.producedWeight >= data.reqWeight ? "OK" : "DEFICIT",
+      (data.isQtyMode ? data.producedQty >= data.reqQty : data.producedWeight >= data.reqWeight) ? "OK" : "DEFICIT",
     ]),
   ];
 

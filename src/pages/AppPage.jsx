@@ -1140,7 +1140,7 @@ export default function AppPage() {
                         <span className="text-ink-soft">{data.width}mm{data.desc ? ` — ${data.desc}` : ""}:</span>
                         {data.isQtyMode
                           ? <span className={data.producedQty >= data.reqQty ? "text-ink font-semibold" : "text-accent-700 font-semibold"}>
-                              {data.producedQty}/{data.reqQty} bob.
+                              {data.producedQty}/{data.reqQty} bob. · ~{Math.round(data.producedWeight)}kg
                             </span>
                           : <span className={data.producedWeight >= data.reqWeight ? "text-ink font-semibold" : "text-accent-700 font-semibold"}>
                               {Math.round(data.producedWeight)}/{data.reqWeight.toFixed(0)}kg
