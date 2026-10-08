@@ -1,0 +1,20 @@
+<div id="v_ot" style="display:none">
+<div class="bar">
+ <span><label>Bobina-mãe</label><select id="ot_m" style="max-width:430px"></select></span>
+ <span><label>Largura da mãe</label><input type="number" id="ot_W" min="1" step="1" placeholder="mm" title="Vem do cadastro (campo LARGURA) quando preenchido"> mm</span>
+ <span><label>Refilo total</label><input type="number" id="ot_ref" value="20" min="0" step="1" title="Somatório das aparas laterais descontado da largura útil"> mm</span>
+ <span><label>Peso médio da bobina</label><input type="number" id="ot_kgc" value="10000" min="1" step="100" style="width:90px"> kg</span>
+ <span><label>Bobinas disponíveis</label><input type="number" id="ot_nc" min="0" step="1" style="width:70px" title="Quantidade de bobinas-mãe para o plano. 0 = sem limite"> <span style="color:#777">(0 = sem limite)</span></span>
+ <span><label>Base da necessidade</label><select id="ot_base"></select></span>
+ <button id="ot_go" class="pri">Otimizar</button>
+</div>
+<div class="bar2">
+ <button id="ot_xls" title="Baixa o resultado em .xlsx">Exportar Excel</button><button id="ot_pdf" title="Abre a impressão; escolha Salvar como PDF">Imprimir / PDF</button>
+ <span class="sp"></span><span id="ot_hint" style="color:#555"></span>
+</div>
+<div class="pl-h noprint">1. Necessidade das bobininhas desta mãe (edite o que quiser)</div>
+<div class="pl-in noprint" id="ot_in"><div class="msg">Carregando dados do Sankhya...</div></div>
+<div class="pl-h">2. Resultado da otimização</div>
+<div class="sum" id="ot_sum">Escolha a bobina-mãe e clique em "Otimizar".</div>
+<div id="ot_out"></div>
+</div>

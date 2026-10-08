@@ -30,3 +30,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Material local (vídeos, ferramentas, zips)
+promo/
+brag-output/
+.codex/
+.impeccable/
+*.zip
