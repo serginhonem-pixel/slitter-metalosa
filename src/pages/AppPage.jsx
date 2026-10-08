@@ -507,12 +507,12 @@ export default function AppPage() {
     results.patterns.forEach((pattern, idx) => {
       const pEff = ((pattern.usedWidth / Number(motherWidth)) * 100).toFixed(1);
       let rows = pattern.setupCoordinates.map((s, i) =>
-        `<tr><td>${i+1}</td><td>${s.start}mm</td><td><strong>${s.width}mm</strong></td><td>${s.end}mm</td><td>${s.desc}</td></tr>`
+        `<tr><td>${i+1}</td><td>${s.start}mm</td><td><strong>${s.width}mm</strong></td><td>${s.end}mm</td><td>${s.desc}</td><td>~${Math.round(s.weight)}kg</td></tr>`
       ).join("");
       if (Number(motherWidth) - pattern.usedWidth > 0) {
-        rows += `<tr class="scrap-row"><td>REF</td><td>${pattern.usedWidth}mm</td><td>${(Number(motherWidth)-pattern.usedWidth).toFixed(1)}mm</td><td>${motherWidth}mm</td><td>SUCATA (~${pattern.scrapWeight.toFixed(1)}kg)</td></tr>`;
+        rows += `<tr class="scrap-row"><td>REF</td><td>${pattern.usedWidth}mm</td><td>${(Number(motherWidth)-pattern.usedWidth).toFixed(1)}mm</td><td>${motherWidth}mm</td><td>SUCATA</td><td>~${Math.round(pattern.scrapWeight / pattern.count)}kg</td></tr>`;
       }
-      cards += `<div class="card"><div class="card-header"><div><span class="pattern-title">Padrão ${String.fromCharCode(65+idx)}</span><span> - ${pattern.count} bobina(s) [${pattern.assignedCoils.map(c=>c.weight+"kg").join(", ")}]</span></div><div><strong>Efic: ${pEff}%</strong></div></div><div style="padding:12px"><table><thead><tr><th>#</th><th>Início</th><th>Largura</th><th>Fim</th><th>Produto</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+      cards += `<div class="card"><div class="card-header"><div><span class="pattern-title">Padrão ${String.fromCharCode(65+idx)}</span><span> - ${pattern.count} bobina(s) [${pattern.assignedCoils.map(c=>c.weight+"kg").join(", ")}]</span></div><div><strong>Efic: ${pEff}%</strong></div></div><div style="padding:12px"><table><thead><tr><th>#</th><th>Início</th><th>Largura</th><th>Fim</th><th>Produto</th><th>Peso/tira</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
     });
 
     const summary = `<div class="total-summary"><div class="summary-box"><div class="summary-label">Total Bobinas</div><div class="summary-val">${results.stats.totalCoils}</div></div><div class="summary-box"><div class="summary-label">Eficiência</div><div class="summary-val">${results.stats.efficiency}%</div></div><div class="summary-box"><div class="summary-label" style="color:#ae1800">Sucata</div><div class="summary-val" style="color:#ae1800">${results.stats.totalScrapWeight}kg</div></div></div>`;
@@ -1323,7 +1323,8 @@ export default function AppPage() {
                                     <th className="p-2 border-r border-divider">Início</th>
                                     <th className="p-2 border-r border-divider">Corte</th>
                                     <th className="p-2 border-r border-divider">Fim</th>
-                                    <th className="p-2">Produto</th>
+                                    <th className="p-2 border-r border-divider">Produto</th>
+                                    <th className="p-2">Peso/tira</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1333,7 +1334,8 @@ export default function AppPage() {
                                       <td className="p-2 border-r border-divider font-mono text-ink-soft font-bold">{setup.start} mm</td>
                                       <td className="p-2 border-r border-divider font-bold text-base text-ink">{setup.width} mm</td>
                                       <td className="p-2 border-r border-divider font-mono text-ink-soft">{setup.end} mm</td>
-                                      <td className="p-2 text-ink-soft truncate max-w-[160px]">{setup.desc}</td>
+                                      <td className="p-2 border-r border-divider text-ink-soft truncate max-w-[160px]">{setup.desc}</td>
+                                      <td className="p-2 font-semibold text-ink">~{Math.round(setup.weight).toLocaleString("pt-BR")} kg</td>
                                     </tr>
                                   ))}
                                   {visualMotherWidth - pattern.usedWidth > 0 && (
@@ -1342,7 +1344,8 @@ export default function AppPage() {
                                       <td className="p-2 border-r border-divider font-mono text-ink-soft">{pattern.usedWidth} mm</td>
                                       <td className="p-2 border-r border-divider font-bold text-accent-700">{(visualMotherWidth - pattern.usedWidth).toFixed(1)} mm</td>
                                       <td className="p-2 border-r border-divider font-mono text-ink-soft">{visualMotherWidth} mm</td>
-                                      <td className="p-2 text-accent-700 font-bold text-xs uppercase">Sucata / Sobra</td>
+                                      <td className="p-2 border-r border-divider text-accent-700 font-bold text-xs uppercase">Sucata / Sobra</td>
+                                      <td className="p-2 text-accent-700 font-semibold">~{Math.round(pattern.scrapWeight / pattern.count).toLocaleString("pt-BR")} kg</td>
                                     </tr>
                                   )}
                                 </tbody>

@@ -342,7 +342,8 @@ export const calculateOptimization = ({ motherWidth, trim, stockCoils, demands, 
       const setupCoordinates = sortedItems.map((item) => {
         const start = currentPos;
         currentPos += item.width;
-        return { start, end: currentPos, width: item.width, desc: item.desc };
+        const weight = coil.weight ? getStripWeight(item.width, safeMotherWidth, coil.weight) : 0;
+        return { start, end: currentPos, width: item.width, desc: item.desc, weight };
       });
 
       patternsMap[key] = {

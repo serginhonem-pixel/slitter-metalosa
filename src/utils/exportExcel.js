@@ -44,9 +44,9 @@ export const exportPlanToExcel = (results, machineConfig, companyName = "Betini 
       [`Padrao ${label} — ${pattern.count} bobina(s) — Efic: ${effPct}%`],
       [`Entrada: ${inputWeight.toLocaleString("pt-BR")} kg | Sucata: ${pattern.scrapWeight.toFixed(1)} kg`],
       [],
-      ["#", "Inicio (mm)", "Corte (mm)", "Fim (mm)", "Produto"],
-      ...pattern.setupCoordinates.map((s, i) => [i + 1, s.start, s.width, s.end, s.desc]),
-      ["REF", pattern.usedWidth, (Number(motherWidth) - pattern.usedWidth).toFixed(1), motherWidth, "SUCATA / SOBRA"],
+      ["#", "Inicio (mm)", "Corte (mm)", "Fim (mm)", "Produto", "Peso/tira (kg)"],
+      ...pattern.setupCoordinates.map((s, i) => [i + 1, s.start, s.width, s.end, s.desc, Math.round(s.weight)]),
+      ["REF", pattern.usedWidth, (Number(motherWidth) - pattern.usedWidth).toFixed(1), motherWidth, "SUCATA / SOBRA", Math.round(pattern.scrapWeight / pattern.count)],
     ];
 
     const patternSheet = XLSX.utils.aoa_to_sheet(patternData);
